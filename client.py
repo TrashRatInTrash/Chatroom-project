@@ -38,7 +38,7 @@ def main():
     receive_thread.start()
 
     # wait for the server to request the username
-    username = input("\nChoose a username: ")
+    username = input()
     # send the chosen username to the server
     client_socket.send(username.encode())
 
