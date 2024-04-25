@@ -1,57 +1,70 @@
 import socket
 import threading
 import time
+import subprocess
 
-# Function to handle client connections
+# REF: 
+# Python official doc for socket lib
+# https://docs.python.org/3/library/socket.html
+# Python offical doc for threading lib
+# https://docs.python.org/3/library/threading.html
+
+
+# incomplete attempt to add a remote shell to the server for admin
+def handle_command(command):
+    try:
+        result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+        return result.decode()
+    except subprocess.CalledProcessError as e:
+        return f"Error: {e.output.decode()}"
+
+
+# function to handle client connections
+# constantly listening to messages from clients and then broadcasts to all connected clientss
 def handle_client(client_socket, address):
     print(f"\nAccepted connection from {address}")
     client_socket.send("\nChoose a username: ".encode())
     username = client_socket.recv(1024).decode()
     print(f"\n{address} chose username: {username}")
     while True:
-        # Receive data from the client
+
         data = client_socket.recv(1024).decode()
         if not data:
             break
         print(f"\nReceived from {username} ({address}): {data}")
-        # Broadcast the received message to all clients
+
         broadcast(f"{username} ({address}): {data}".encode())
     client_socket.close()
 
-# Function to broadcast message to all clients
+# Function to broadcast message to all clients in list
 def broadcast(message):
     for client in clients:
         client.send(message)
 
-# Main server function
 def main():
+
     # Server configuration
     host = "127.0.0.1"
     port = 5555
 
-    # Create a socket object
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Bind the socket to the host and port
     server_socket.bind((host, port))
 
-    # Listen for incoming connections
     server_socket.listen()
 
     print(f"\nServer listening on {host}:{port}")
 
+    # constantly listening for client connections
     while True:
-        # Accept incoming connections
         client_socket, address = server_socket.accept()
 
-        # Add the new client to the list of clients
         clients.append(client_socket)
 
-        # Start a new thread to handle the client
+        # Start a new thread to handle each client
         client_thread = threading.Thread(target=handle_client, args=(client_socket, address))
         client_thread.start()
 
-# List to store connected clients
 clients = []
 
 if __name__ == "__main__":
