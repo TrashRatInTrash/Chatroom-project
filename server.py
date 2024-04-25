@@ -1,17 +1,21 @@
 import socket
 import threading
+import time
 
 # Function to handle client connections
 def handle_client(client_socket, address):
-    print(f"Accepted connection from {address}")
+    print(f"\nAccepted connection from {address}")
+    client_socket.send("\nChoose a username: ".encode())
+    username = client_socket.recv(1024).decode()
+    print(f"\n{address} chose username: {username}")
     while True:
         # Receive data from the client
         data = client_socket.recv(1024).decode()
         if not data:
             break
-        print(f"Received from {address}: {data}")
+        print(f"\nReceived from {username} ({address}): {data}")
         # Broadcast the received message to all clients
-        broadcast(data.encode())
+        broadcast(f"{username} ({address}): {data}".encode())
     client_socket.close()
 
 # Function to broadcast message to all clients
@@ -34,7 +38,7 @@ def main():
     # Listen for incoming connections
     server_socket.listen()
 
-    print(f"Server listening on {host}:{port}")
+    print(f"\nServer listening on {host}:{port}")
 
     while True:
         # Accept incoming connections
