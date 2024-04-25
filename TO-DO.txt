@@ -1,0 +1,20 @@
+1. Fragmentation and Reassembly: using scapy
+add this to handle larger messages
+we have to set a specific maximum size of packet (example 1025 bytes) 
+and fragment accordingly
+this is needed to send larger text messages and if we want to add file sending
+capability (images/videos)
+
+2. Sequence Numbers & packet acknowledgement: using scapy
+add acknowledgement for recieved packets (on server and client side)
+add sequence numbers to detect missing packets in order to retransmit
+
+3. Error Detection: using scapy
+add checksums to the ends of packets to detect transmission errors 
+(packet got corrupted and some of the bits got changed while transmitting)
+
+4. Authentication:
+add authentication using passwords and tokens for security purposes
+
+5. Encryption:
+add encryption to each packet sent

@@ -1,0 +1,7 @@
+
+Scapy python:
+https://www.freecodecamp.org/news/how-to-use-scapy-python-networking/
+https://scapy.readthedocs.io/en/latest/usage.html
+https://www.youtube.com/watch?v=0xcr_UH4sNU
+
+
