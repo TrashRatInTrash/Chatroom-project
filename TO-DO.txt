@@ -1,21 +1,53 @@
-1. Fragmentation and Reassembly: using scapy
-add this to handle larger messages
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+TO ADD:
+
+!. add different rooms for clients to create and join
+
+!. add authentication using keys to be able to send messages only to rooms you are in
+    these keys are established on connection
+
+!. Fragmentation and Reassembly: using scapy
+add this to handle larger messages (NOT ALL MESSAGES JUST THE BIG ONES)
 we have to set a specific maximum size of packet (example 1025 bytes) 
 and fragment accordingly
 this is needed to send larger text messages and if we want to add file sending
 capability (images/videos)
 
-2. Sequence Numbers & packet acknowledgement: using scapy
+!. Sequence Numbers & packet acknowledgement: using scapy
 add acknowledgement for recieved packets (on server and client side)
 add sequence numbers to detect missing packets in order to retransmit
 
-3. Error Detection: using scapy
+!. Error Detection: using scapy
 add checksums to the ends of packets to detect transmission errors 
 (packet got corrupted and some of the bits got changed while transmitting)
 
-4. Authentication:
+!. Authentication:
 add authentication using passwords and tokens for security purposes
 
-5. Encryption:
-add encryption to each packet sent
+!. Encryption:
+add encryption to each packet sent usin pgp encryption
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ADDED: 
+
+! added username handling:
+    at connection user sends username, server stores username mapped to the users address
+
+!. added timestamps for sending and receiving on both sides
+
+!. added parsing messages in message_handler.py using JSON formatting
+    to easily add things to the packet, whenever we update packet format dont forget to update the parsing function (in message_handler.py)
+
+    MESSAGE EXPLANATION:
+        messages come in 2 forms:
+            1. normal next message, example:
+                TYPE: message
+                CONTENT: Hello world
+                TIME_SENT: 11:04:20
+            2. Command message, for example if the user sends /qqq it disconnects the user from the server:
+                disconnect message
+                TYPE: Command
+                CONTENT: qqq
+                TIME_SENT: 11:04:20
+        these are handled in the receive and send functions for both client.py AND server.py 
+        and all thses functions must be updated whenever we change the message format
