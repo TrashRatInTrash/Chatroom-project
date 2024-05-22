@@ -9,6 +9,7 @@ import message_handler
 # Python offical doc for threading lib
 # https://docs.python.org/3/library/threading.html
 
+#test
 
 # Message sent is currently in the form of
 # {username} {text message} {user timestamp}
