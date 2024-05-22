@@ -10,6 +10,7 @@ import json
 # Python offical doc for threading lib
 # https://docs.python.org/3/library/threading.html
 
+#test
 
 def send_incorrect_checksum_message(socket, content):
     # Create a valid message first
