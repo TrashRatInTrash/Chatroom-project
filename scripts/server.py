@@ -5,11 +5,10 @@ import message_handler
 
 
 def handle_command(command):
-    try:
-        result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
-        return result.decode()
-    except subprocess.CalledProcessError as e:
-        return f"Error: {e.output.decode()}"
+    if command["content"] == "qqq":
+        return 1
+
+    
 
 
 def handle_client(client_socket, address):
@@ -33,19 +32,27 @@ def handle_client(client_socket, address):
             if not message:
                 break
 
-            if message["type"] == "command" and message["content"] == "qqq":
-                print(f"\n{username} ({address}) disconnected gracefully.")
-                break
+            if message["type"] == "command":
+                code = handle_command(message)
+                print(f'\n command code {code}')
+                if code == 1:
+                    message_handler.send_message(client_socket,"rsp",1) #command success
+                    break
+                
             else:
                 print(
                     f"\nReceived from {username} ({address}): {message['content']} received at {message['time_sent']}"
                 )
                 broadcast(message["content"], username)
-
+                message_handler.send_message(client_socket, "rsp",0) #message success
+    except ValueError as ve:
+        print(f" Value Error: {ve}, user diconnected")
+        message_handler.send_message(client_socket, "rsp", 2) #checksum error
     except Exception as e:
         print(
             f"Exception in thread {threading.current_thread().name} ({username}): {e}"
         )
+        message_handler.send_message(client_socket,"rsp",4) #default error
     finally:
         client_socket.close()
         clients.remove(client_socket)
