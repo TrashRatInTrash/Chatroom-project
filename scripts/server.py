@@ -1,6 +1,7 @@
 import socket
 import threading
 import message_handler
+from CONSTANTS import MessageType
 
 clients = {}
 client_seq_nums = {}  # Sequence numbers for sending messages to clients
@@ -16,12 +17,14 @@ def handle_client(client_socket, address):
     print(f"\nAccepted connection from {address}")
     print(f"\nCurrent active threads: {threading.active_count()}")
 
-    # Initialize sequence numbers for the client
     client_seq_nums[client_socket] = 0
     server_seq_nums[client_socket] = 0
 
     message_handler.send_message(
-        client_socket, "info", "Choose a username:", client_seq_nums[client_socket]
+        client_socket,
+        MessageType.INFO,
+        "Choose a username:",
+        client_seq_nums[client_socket],
     )
     client_seq_nums[client_socket] += 1
 
@@ -29,7 +32,7 @@ def handle_client(client_socket, address):
         client_socket, server_seq_nums[client_socket]
     )
     server_seq_nums[client_socket] += 1
-    if message and message["type"] == "response":
+    if message and message["type"] == MessageType.RESPONSE.value:
         username = message["content"].strip()
     else:
         raise ValueError("Invalid username response")
@@ -47,16 +50,16 @@ def handle_client(client_socket, address):
 
             server_seq_nums[client_socket] += 1
 
-            if message["type"] == "command":
+            if message["type"] == MessageType.COMMAND.value:
                 code = return_command_code(message)
                 print(f"\n command code {code}")
                 if code == 1:
                     message_handler.send_message(
                         client_socket,
-                        "rsp",
+                        MessageType.RESP,
                         1,
-                        client_seq_nums[client_socket],  # command success
-                    )
+                        client_seq_nums[client_socket],
+                    )  # command success
                     client_seq_nums[client_socket] += 1
                     break
             else:
@@ -65,31 +68,22 @@ def handle_client(client_socket, address):
                 )
                 broadcast(message["content"], username)
                 message_handler.send_message(
-                    client_socket,
-                    "rsp",
-                    0,
-                    client_seq_nums[client_socket],  # message success
-                )
+                    client_socket, MessageType.RESP, 0, client_seq_nums[client_socket]
+                )  # message success
                 client_seq_nums[client_socket] += 1
     except ValueError as ve:
         print(f" Value Error: {ve}, user disconnected")
         message_handler.send_message(
-            client_socket,
-            "rsp",
-            2,
-            client_seq_nums[client_socket],  # checksum catchall error
-        )
+            client_socket, MessageType.RESP, 2, client_seq_nums[client_socket]
+        )  # checksum catchall error
         client_seq_nums[client_socket] += 1
     except Exception as e:
         print(
             f"Exception in thread {threading.current_thread().name} ({username}): {e}"
         )
         message_handler.send_message(
-            client_socket,
-            "rsp",
-            4,
-            client_seq_nums[client_socket],  # default catchall error
-        )
+            client_socket, MessageType.RESP, 4, client_seq_nums[client_socket]
+        )  # default catchall error
         client_seq_nums[client_socket] += 1
     finally:
         client_socket.close()
@@ -102,14 +96,17 @@ def handle_client(client_socket, address):
 def broadcast(content, username):
     for client in clients:
         message_handler.send_message(
-            client, "message", content, client_seq_nums[client]
+            client,
+            MessageType.MESSAGE,
+            f"{username}: {content}",
+            client_seq_nums[client],
         )
         client_seq_nums[client] += 1
 
 
 def main():
     host = "127.0.0.1"
-    port = 5555
+    port = 5554
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((host, port))

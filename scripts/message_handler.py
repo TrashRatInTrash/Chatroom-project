@@ -2,6 +2,7 @@ import json
 import time
 import hashlib
 import socket
+from CONSTANTS import MessageType
 
 
 def create_checksum(message_dict):
@@ -13,7 +14,7 @@ def create_message(msg_type, content, seq_num, time_sent=None, checksum=None):
     if time_sent is None:
         time_sent = time.strftime("%H:%M:%S")
     message = {
-        "type": msg_type,
+        "type": msg_type.value,  # use .value to get the string representation
         "content": content,
         "time_sent": time_sent,
         "seq_num": seq_num,
@@ -41,7 +42,7 @@ def parse_message(message_str):
 def send_message(sock, msg_type, content, seq_num):
     message_str = create_message(msg_type, content, seq_num)
     ack_received = False
-    timeout = 2  # seconds
+    timeout = 5  # seconds
 
     while not ack_received:
         try:
@@ -49,7 +50,10 @@ def send_message(sock, msg_type, content, seq_num):
             sock.settimeout(timeout)
             ack_message_str = sock.recv(1024).decode()
             ack_message = parse_message(ack_message_str)
-            if ack_message["type"] == "ACK" and ack_message["seq_num"] == seq_num:
+            if (
+                ack_message["type"] == MessageType.ACK.value
+                and ack_message["seq_num"] == seq_num
+            ):
                 ack_received = True
         except socket.timeout:
             print("Timeout! Resending message.")
@@ -65,12 +69,15 @@ def receive_message(sock, expected_seq_num):
             if data:
                 message = parse_message(data)
                 if message["seq_num"] == expected_seq_num:
-                    ack_message_str = create_message("ACK", "", message["seq_num"])
+                    ack_message_str = create_message(
+                        MessageType.ACK, "", message["seq_num"]
+                    )
                     sock.sendall(ack_message_str.encode())
                     return message
                 else:
-                    # Send ACK for the last received sequence number to handle possible retransmissions
-                    ack_message_str = create_message("ACK", "", expected_seq_num - 1)
+                    ack_message_str = create_message(
+                        MessageType.ACK, "", expected_seq_num - 1
+                    )
                     sock.sendall(ack_message_str.encode())
         except socket.timeout:
             continue

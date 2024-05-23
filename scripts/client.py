@@ -1,6 +1,7 @@
 import socket
 import threading
 import message_handler
+from CONSTANTS import MessageType
 import json
 
 client_seq_num = 0  # Sequence number for sending messages
@@ -9,7 +10,9 @@ server_seq_num = 0  # Sequence number for receiving messages
 
 def send_incorrect_checksum_message(sock, content):
     global client_seq_num
-    valid_message = message_handler.create_message("message", content, client_seq_num)
+    valid_message = message_handler.create_message(
+        MessageType.MESSAGE, content, client_seq_num
+    )
     message_dict = json.loads(valid_message)
     message_dict["checksum"] = "incorrectchecksum"
     incorrect_message = json.dumps(message_dict)
@@ -20,7 +23,7 @@ def send_incorrect_checksum_message(sock, content):
 def handle_command(sock, command):
     global client_seq_num
     if command == "/qqq":
-        message_handler.send_message(sock, "command", "qqq", client_seq_num)
+        message_handler.send_message(sock, MessageType.COMMAND, "qqq", client_seq_num)
         client_seq_num += 1
         return False
     elif command == "/wrong":
@@ -35,7 +38,7 @@ def handle_command(sock, command):
 def send_messages(sock):
     global client_seq_num
     username = input("Choose a username: ")
-    message_handler.send_message(sock, "response", username, client_seq_num)
+    message_handler.send_message(sock, MessageType.RESPONSE, username, client_seq_num)
     client_seq_num += 1
 
     while True:
@@ -44,7 +47,9 @@ def send_messages(sock):
             if not handle_command(sock, message):
                 break
         else:
-            message_handler.send_message(sock, "message", message, client_seq_num)
+            message_handler.send_message(
+                sock, MessageType.MESSAGE, message, client_seq_num
+            )
             client_seq_num += 1
 
 
@@ -67,7 +72,7 @@ def receive_messages(sock):
 
 def main():
     host = "127.0.0.1"
-    port = 5555
+    port = 5554
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((host, port))
