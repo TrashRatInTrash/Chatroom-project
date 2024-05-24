@@ -14,7 +14,7 @@ def create_message(msg_type, content, seq_num, time_sent=None, checksum=None):
     if time_sent is None:
         time_sent = time.strftime("%H:%M:%S")
     message = {
-        "type": msg_type.value,  # use .value to get the string representation
+        "type": msg_type.value,  # use .value to get the string value from the enum
         "content": content,
         "time_sent": time_sent,
         "seq_num": seq_num,
@@ -42,10 +42,11 @@ def parse_message(message_str):
 def send_message(sock, msg_type, content, seq_num):
     message_str = create_message(msg_type, content, seq_num)
     ack_received = False
-    timeout = 5  # seconds
+    timeout = 2  # seconds
 
     while not ack_received:
         try:
+            print(f"\n~~~~~~~~~~~~~~~~\nSENDING {message_str}")
             sock.sendall(message_str.encode())
             sock.settimeout(timeout)
             ack_message_str = sock.recv(1024).decode()
@@ -68,6 +69,7 @@ def receive_message(sock, expected_seq_num):
             data = sock.recv(1024).decode()
             if data:
                 message = parse_message(data)
+                print(f"\n~~~~~~~~~~~~~~~~\nRECEIVED {message}")
                 if message["seq_num"] == expected_seq_num:
                     ack_message_str = create_message(
                         MessageType.ACK, "", message["seq_num"]

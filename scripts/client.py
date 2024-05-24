@@ -38,14 +38,14 @@ def handle_command(sock, command):
 def send_messages(sock):
     global client_seq_num
     username = input("Choose a username: ")
-    message_handler.send_message(sock, MessageType.RESPONSE, username, client_seq_num)
+    message_handler.send_message(sock, MessageType.RESP, username, client_seq_num)
     client_seq_num += 1
 
     while True:
         message = input("\nEnter message: ")
         if message.startswith("/"):
             if not handle_command(sock, message):
-                break
+                continue
         else:
             message_handler.send_message(
                 sock, MessageType.MESSAGE, message, client_seq_num

@@ -7,4 +7,3 @@ class MessageType(Enum):
     ACK = "ack"
     RESP = "resp"
     INFO = "info"
-    RESPONSE = "response"

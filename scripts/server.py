@@ -32,7 +32,7 @@ def handle_client(client_socket, address):
         client_socket, server_seq_nums[client_socket]
     )
     server_seq_nums[client_socket] += 1
-    if message and message["type"] == MessageType.RESPONSE.value:
+    if message and message["type"] == MessageType.RESP.value:
         username = message["content"].strip()
     else:
         raise ValueError("Invalid username response")
