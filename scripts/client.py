@@ -4,8 +4,8 @@ import message_handler
 from CONSTANTS import MessageType
 import json
 
-client_seq_num = 0  # Sequence number for sending messages
-server_seq_num = 0  # Sequence number for receiving messages
+client_seq_num = 0
+server_seq_num = 0
 
 
 def send_incorrect_checksum_message(sock, content):
@@ -45,12 +45,16 @@ def send_messages(sock):
         message = input("\nEnter message: ")
         if message.startswith("/"):
             if not handle_command(sock, message):
-                continue
+                break
         else:
-            message_handler.send_message(
-                sock, MessageType.MESSAGE, message, client_seq_num
-            )
-            client_seq_num += 1
+            try:
+                message_handler.send_message(
+                    sock, MessageType.MESSAGE, message, client_seq_num
+                )
+                client_seq_num += 1
+            except Exception as e:
+                print(f"Failed to send message: {e}")
+                break
 
 
 def receive_messages(sock):
@@ -67,6 +71,9 @@ def receive_messages(sock):
                 print("\nReceived invalid data")
         except OSError:
             print("Connection closed by the server.")
+            break
+        except Exception as e:
+            print(f"Error receiving message: {e}")
             break
 
 

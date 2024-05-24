@@ -4,8 +4,8 @@ import message_handler
 from CONSTANTS import MessageType
 
 clients = {}
-client_seq_nums = {}  # Sequence numbers for sending messages to clients
-server_seq_nums = {}  # Sequence numbers for receiving messages from clients
+client_seq_nums = {}
+server_seq_nums = {}
 
 
 def return_command_code(command):
@@ -28,19 +28,19 @@ def handle_client(client_socket, address):
     )
     client_seq_nums[client_socket] += 1
 
-    message = message_handler.receive_message(
-        client_socket, server_seq_nums[client_socket]
-    )
-    server_seq_nums[client_socket] += 1
-    if message and message["type"] == MessageType.RESP.value:
-        username = message["content"].strip()
-    else:
-        raise ValueError("Invalid username response")
-
-    print(f"\n{address} chose username: {username}")
-    clients[client_socket] = username
-
     try:
+        message = message_handler.receive_message(
+            client_socket, server_seq_nums[client_socket]
+        )
+        server_seq_nums[client_socket] += 1
+        if message and message["type"] == MessageType.RESP.value:
+            username = message["content"].strip()
+        else:
+            raise ValueError("Invalid username response")
+
+        print(f"\n{address} chose username: {username}")
+        clients[client_socket] = username
+
         while True:
             message = message_handler.receive_message(
                 client_socket, server_seq_nums[client_socket]
@@ -95,13 +95,16 @@ def handle_client(client_socket, address):
 
 def broadcast(content, username):
     for client in clients:
-        message_handler.send_message(
-            client,
-            MessageType.MESSAGE,
-            f"{username}: {content}",
-            client_seq_nums[client],
-        )
-        client_seq_nums[client] += 1
+        try:
+            message_handler.send_message(
+                client,
+                MessageType.MESSAGE,
+                f"{username}: {content}",
+                client_seq_nums[client],
+            )
+            client_seq_nums[client] += 1
+        except Exception as e:
+            print(f"Failed to send message to {clients[client]}: {e}")
 
 
 def main():
@@ -114,12 +117,19 @@ def main():
 
     print(f"\nServer listening on {host}:{port}")
 
-    while True:
-        client_socket, address = server_socket.accept()
-        client_thread = threading.Thread(
-            target=handle_client, args=(client_socket, address)
-        )
-        client_thread.start()
+    try:
+        while True:
+            client_socket, address = server_socket.accept()
+            client_thread = threading.Thread(
+                target=handle_client, args=(client_socket, address)
+            )
+            client_thread.start()
+    except KeyboardInterrupt:
+        print("\nServer shutting down.")
+    except Exception as e:
+        print(f"Server error: {e}")
+    finally:
+        server_socket.close()
 
 
 if __name__ == "__main__":
