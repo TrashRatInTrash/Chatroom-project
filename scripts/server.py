@@ -42,41 +42,46 @@ def handle_client(client_socket, address):
         clients[client_socket] = username
 
         while True:
-            message = message_handler.receive_message(
-                client_socket, server_seq_nums[client_socket]
-            )
-            if not message:
-                break
+            try:
+                message = message_handler.receive_message(
+                    client_socket, server_seq_nums[client_socket]
+                )
+                if not message:
+                    break
 
-            server_seq_nums[client_socket] += 1
+                server_seq_nums[client_socket] += 1
 
-            if message["type"] == MessageType.COMMAND.value:
-                code = return_command_code(message)
-                print(f"\n command code {code}")
-                if code == 1:
+                if message["type"] == MessageType.COMMAND.value:
+                    code = return_command_code(message)
+                    print(f"\n command code {code}")
+                    if code == 1:
+                        message_handler.send_message(
+                            client_socket,
+                            MessageType.RESP,
+                            1,
+                            client_seq_nums[client_socket],
+                        )  # command success
+                        client_seq_nums[client_socket] += 1
+                        break
+                else:
+                    print(
+                        f"\nReceived from {username} ({address}): {message['content']} received at {message['time_sent']}"
+                    )
+                    broadcast(message["content"], username)
                     message_handler.send_message(
                         client_socket,
                         MessageType.RESP,
-                        1,
+                        0,
                         client_seq_nums[client_socket],
-                    )  # command success
+                    )  # message success
                     client_seq_nums[client_socket] += 1
-                    break
-            else:
-                print(
-                    f"\nReceived from {username} ({address}): {message['content']} received at {message['time_sent']}"
-                )
-                broadcast(message["content"], username)
+
+            except ValueError as ve:
+                print(f" Value Error: {ve}, user disconnected")
                 message_handler.send_message(
-                    client_socket, MessageType.RESP, 0, client_seq_nums[client_socket]
-                )  # message success
+                    client_socket, MessageType.RESP, 2, client_seq_nums[client_socket]
+                )  # checksum catchall error
                 client_seq_nums[client_socket] += 1
-    except ValueError as ve:
-        print(f" Value Error: {ve}, user disconnected")
-        message_handler.send_message(
-            client_socket, MessageType.RESP, 2, client_seq_nums[client_socket]
-        )  # checksum catchall error
-        client_seq_nums[client_socket] += 1
     except Exception as e:
         print(
             f"Exception in thread {threading.current_thread().name} ({username}): {e}"

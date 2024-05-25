@@ -27,6 +27,11 @@ add authentication using passwords and tokens for security purposes
 !. Encryption:
 add encryption to each packet sent usin pgp encryption
 
+!. Add way to queue/buffer many requests at once from same user. 
+program crashes at seq numbers otherwise
+
+!. fix retransmission for bad checksums, have to remake package entirely and retransmit it (or something)
+        SPLIT parse into function to parse and bool function for checksum
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ADDED: 
 

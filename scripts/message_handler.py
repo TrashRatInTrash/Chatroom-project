@@ -7,7 +7,7 @@ from CONSTANTS import MessageType
 # Configurable timeout values
 SEND_TIMEOUT = 2  # seconds
 RECEIVE_TIMEOUT = 2  # seconds
-DELAY = 0.5  # delay in seconds for send and receive operations
+DELAY = 0.2  # delay in seconds for send and receive operations
 
 
 def create_checksum(message_dict):
@@ -52,7 +52,7 @@ def send_message(sock, msg_type, content, seq_num):
         try:
             print(f"\n~~~~~~~~~~~~~~~~\nSENDING {message_str}")
             sock.sendall(message_str.encode())
-            time.sleep(DELAY)  # Delay for 0.5 seconds
+            time.sleep(DELAY)  # artificial delay to better read logs in real time
             sock.settimeout(SEND_TIMEOUT)
             ack_message_str = sock.recv(1024).decode()
             ack_message = parse_message(ack_message_str)
@@ -66,12 +66,12 @@ def send_message(sock, msg_type, content, seq_num):
                 print(f"Unexpected ACK: {ack_message}")
         except socket.timeout:
             print("Timeout! Resending message.")
+            # dont break here, need to retransmit
         except BrokenPipeError:
             print("Connection closed by the server.")
             break
         except Exception as e:
             print(f"Exception while sending message: {e}")
-            break
 
 
 def receive_message(sock, expected_seq_num):
@@ -82,7 +82,7 @@ def receive_message(sock, expected_seq_num):
             if data:
                 message = parse_message(data)
                 print(f"\n~~~~~~~~~~~~~~~~\nRECEIVED {message}")
-                time.sleep(DELAY)  # Delay for 0.5 seconds
+                time.sleep(DELAY)  # artificial delay to better read logs in real time
                 if message["seq_num"] == expected_seq_num:
                     ack_message_str = create_message(
                         MessageType.ACK, "", message["seq_num"]
@@ -104,4 +104,3 @@ def receive_message(sock, expected_seq_num):
             break
         except Exception as e:
             print(f"Exception while receiving message: {e}")
-            break
