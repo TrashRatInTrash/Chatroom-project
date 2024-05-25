@@ -33,6 +33,8 @@ async def handle_client(reader, writer):
     server_seq_nums[address] = 0
     username = None
 
+    current_room = none
+
     try:
         # Prompt for username
         await message_handler.send_message(
@@ -201,8 +203,8 @@ async def broadcast(content, username, room_id):
 
 
 async def main():
-    server = await asyncio.start_server(handle_client, "0.0.0.0", 5555)
-    print("Server listening on 127.0.0.1:5555")
+    server = await asyncio.start_server(handle_client, "127.0.0.1", 5555)
+    print("Server listening on 0.0.0.0:5555")
     async with server:
         await server.serve_forever()
 

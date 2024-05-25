@@ -64,7 +64,7 @@ async def receive_message(reader, expected_seq_num):
     )  # Debugging statement
     message = parse_message(message_str)
     if message["seq_num"] != expected_seq_num:
-        raise ValueError(f"Sequence number mismatch, expected {expected_seq_num} received {message["seq_num"]}")
+        raise ValueError(f"Sequence number mismatch, expected {expected_seq_num} received {message['seq_num']}")
     print(
         f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nProcessed message: {message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     )  # Debugging statement

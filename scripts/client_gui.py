@@ -94,7 +94,7 @@ def main():
     close_button.grid(row=1, column=2, padx=10, pady=10)
 
     loop = asyncio.get_event_loop()
-    reader, writer = loop.run_until_complete(asyncio.open_connection("192.168.28.83", 5555))
+    reader, writer = loop.run_until_complete(asyncio.open_connection("127.0.0.1", 5555))
     print("Connected to server")
 
     send_input = handle_user_input(writer, message_entry, message_display)
