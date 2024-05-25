@@ -1,116 +1,67 @@
-# client.py
-
-import socket
-import threading
+import asyncio
 import message_handler
 from CONSTANTS import MessageType
 import json
+import threading
 
 client_seq_num = 0
 server_seq_num = 0
+running = True
 
-
-def send_incorrect_checksum_message(sock, content):
+async def send_message(writer, msg_type, content):
     global client_seq_num
-    valid_message = message_handler.create_message(
-        MessageType.MESSAGE, content, client_seq_num
-    )
-    message_dict = json.loads(valid_message)
-    message_dict["checksum"] = "incorrectchecksum"
-    incorrect_message = json.dumps(message_dict)
-    sock.sendall(incorrect_message.encode())
+    await message_handler.send_message(writer, msg_type, content, client_seq_num)
     client_seq_num += 1
 
-
-def handle_command(sock, command):
-    global client_seq_num
-    if command == "/qqq":
-        message_handler.send_message(sock, MessageType.COMMAND, "qqq", client_seq_num)
-        client_seq_num += 1
-        return False
-    elif command == "/wrong":
-        send_incorrect_checksum_message(
-            sock, "This is a test message with incorrect checksum."
-        )
-    elif command.startswith("/create"):
-        message_handler.send_message(
-            sock, MessageType.COMMAND, "/create", client_seq_num
-        )
-        client_seq_num += 1
-    elif command.startswith("/join"):
-        room_id = command.split()[1]
-        message_handler.send_message(
-            sock, MessageType.COMMAND, f"/join {room_id}", client_seq_num
-        )
-        client_seq_num += 1
-    else:
-        print("Unknown command")
-    return True
-
-
-def send_messages(sock):
-    global client_seq_num
-    username = input("Choose a username: ")
-    message_handler.send_message(sock, MessageType.RESP, username, client_seq_num)
-    client_seq_num += 1
-
-    while True:
-        message = input("\nEnter message: ")
-        if message.startswith("/"):
-            if not handle_command(sock, message):
-                break
-        else:
-            try:
-                message_handler.send_message(
-                    sock, MessageType.MESSAGE, message, client_seq_num
-                )
-                client_seq_num += 1
-            except Exception as e:
-                print(f"Failed to send message: {e}")
-                break
-
-
-def receive_messages(sock):
+async def receive_message(reader):
     global server_seq_num
-    while True:
-        try:
-            message = message_handler.receive_message(sock, server_seq_num)
-            if not message:
+    global running
+    try:
+        while running:
+            message = await message_handler.receive_message(reader, server_seq_num)
+            server_seq_num += 1
+            print(f"Received message: {message["content"]}")  # Debugging statement
+    except Exception as e:
+        print(f"Error receiving message: {e}")
+
+def handle_user_input(writer):
+    global running
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    while running:
+        message = input("Enter message: ")
+        if message.startswith("/"):
+            command = message.strip()
+            if command == "/qqq":
+                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                running = False
                 break
-            if message["type"] == MessageType.NACK.value:
-                print(f"NACK received for seq_num: {server_seq_num}, retransmitting...")
-                message_handler.send_message(
-                    sock, message["type"], message["content"], server_seq_num
-                )
+            elif command.startswith("/create"):
+                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+            elif command.startswith("/join"):
+                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+            elif command.startswith("/leave"):
+                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+            elif command == "/wrong":
+                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
             else:
-                print(f"\nReceived: {message['content']} at {message['time_sent']}")
-                server_seq_num += 1
-        except OSError:
-            print("Connection closed by the server.")
-            break
-        except Exception as e:
-            print(f"Error receiving message: {e}")
-            break
+                print("Unknown command")
+        else:
+            loop.run_until_complete(send_message(writer, MessageType.MESSAGE, message))
 
+async def main():
+    global running
+    reader, writer = await asyncio.open_connection("127.0.0.1", 5555)
+    print("Connected to server")
 
-def main():
-    host = "127.0.0.1"
-    port = 5555
+    input_thread = threading.Thread(target=handle_user_input, args=(writer,))
+    input_thread.start()
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((host, port))
-    print("\nConnected to server")
+    await receive_message(reader)
 
-    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
-    receive_thread.start()
-
-    send_thread = threading.Thread(target=send_messages, args=(client_socket,))
-    send_thread.start()
-
-    send_thread.join()
-    client_socket.close()
-    print("Disconnected from server")
-
+    print("Closing connection")
+    writer.close()
+    await writer.wait_closed()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
