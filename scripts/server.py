@@ -1,3 +1,5 @@
+# server.py
+
 import socket
 import threading
 import message_handler
@@ -32,11 +34,16 @@ def handle_client(client_socket, address):
         message = message_handler.receive_message(
             client_socket, server_seq_nums[client_socket]
         )
-        server_seq_nums[client_socket] += 1
-        if message and message["type"] == MessageType.RESP.value:
-            username = message["content"].strip()
+        if message:
+            if message["seq_num"] != server_seq_nums[client_socket]:
+                raise ValueError("Sequence number mismatch")
+            server_seq_nums[client_socket] += 1
+            if message["type"] == MessageType.RESP.value:
+                username = message["content"].strip()
+            else:
+                raise ValueError("Invalid username response")
         else:
-            raise ValueError("Invalid username response")
+            raise ValueError("No message received for username")
 
         print(f"\n{address} chose username: {username}")
         clients[client_socket] = username
@@ -48,6 +55,9 @@ def handle_client(client_socket, address):
                 )
                 if not message:
                     break
+
+                if message["seq_num"] != server_seq_nums[client_socket]:
+                    raise ValueError("Sequence number mismatch")
 
                 server_seq_nums[client_socket] += 1
 
@@ -83,19 +93,20 @@ def handle_client(client_socket, address):
                 )  # checksum catchall error
                 client_seq_nums[client_socket] += 1
     except Exception as e:
-        print(
-            f"Exception in thread {threading.current_thread().name} ({username}): {e}"
-        )
+        print(f"Exception in thread {threading.current_thread().name} ({address}): {e}")
         message_handler.send_message(
             client_socket, MessageType.RESP, 4, client_seq_nums[client_socket]
         )  # default catchall error
         client_seq_nums[client_socket] += 1
     finally:
         client_socket.close()
-        del clients[client_socket]
-        del client_seq_nums[client_socket]
-        del server_seq_nums[client_socket]
-        print(f"Connection with {username} ({address}) closed.")
+        if client_socket in clients:
+            del clients[client_socket]
+        if client_socket in client_seq_nums:
+            del client_seq_nums[client_socket]
+        if client_socket in server_seq_nums:
+            del server_seq_nums[client_socket]
+        print(f"Connection with {address} closed.")
 
 
 def broadcast(content, username):

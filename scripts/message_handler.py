@@ -1,3 +1,5 @@
+# message_handler.py
+
 import json
 import time
 import hashlib
@@ -9,11 +11,9 @@ SEND_TIMEOUT = 2  # seconds
 RECEIVE_TIMEOUT = 2  # seconds
 DELAY = 0.2  # delay in seconds for send and receive operations
 
-
 def create_checksum(message_dict):
     message_str = json.dumps(message_dict, sort_keys=True)
     return hashlib.sha256(message_str.encode()).hexdigest()
-
 
 def create_message(msg_type, content, seq_num, time_sent=None, checksum=None):
     if time_sent is None:
@@ -29,7 +29,6 @@ def create_message(msg_type, content, seq_num, time_sent=None, checksum=None):
     message["checksum"] = checksum
     return json.dumps(message)
 
-
 def parse_message(message_str):
     message_dict = json.loads(message_str)
     received_checksum = message_dict.pop("checksum", None)
@@ -42,7 +41,6 @@ def parse_message(message_str):
 
     message_dict["checksum"] = received_checksum
     return message_dict
-
 
 def send_message(sock, msg_type, content, seq_num):
     message_str = create_message(msg_type, content, seq_num)
@@ -66,13 +64,12 @@ def send_message(sock, msg_type, content, seq_num):
                 print(f"Unexpected ACK: {ack_message}")
         except socket.timeout:
             print("Timeout! Resending message.")
-            # dont break here, need to retransmit
+            # don't break here, need to retransmit
         except BrokenPipeError:
             print("Connection closed by the server.")
             break
         except Exception as e:
             print(f"Exception while sending message: {e}")
-
 
 def receive_message(sock, expected_seq_num):
     while True:
@@ -93,10 +90,10 @@ def receive_message(sock, expected_seq_num):
                     print(
                         f"Unexpected seq_num: {message['seq_num']} (expected: {expected_seq_num})"
                     )
-                    ack_message_str = create_message(
+                    nack_message_str = create_message(
                         MessageType.ACK, "", expected_seq_num - 1
                     )
-                    sock.sendall(ack_message_str.encode())
+                    sock.sendall(nack_message_str.encode())
         except socket.timeout:
             continue
         except BrokenPipeError:
