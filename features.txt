@@ -1,0 +1,14 @@
+1. uses asyncio to establish connection and send stuff
+
+2. message types mitil command w ack and stuff
+
+3. user commands
+
+4. chat rooms
+
+5. checksum validation for error Detection
+
+6. can handle multiple clients sending and receiving at once with asyncio
+
+7. users are tracked by address and username they choose
+

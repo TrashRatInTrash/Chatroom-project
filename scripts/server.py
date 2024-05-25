@@ -8,6 +8,19 @@ server_seq_nums = {}
 rooms = {}
 
 
+MessageTypeMapping = {
+    MessageType.COMMAND: 0,
+    MessageType.MESSAGE: 1,
+    MessageType.ACK: 2,
+    MessageType.NACK: 3,
+    MessageType.RESP: 4,
+    MessageType.INFO: 5,
+}
+
+# Reverse map to convert numerical values back to MessageType
+ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
+
+
 def return_command_code(command):
     if command == "/qqq":
         return 1
@@ -57,7 +70,9 @@ async def handle_client(reader, writer):
                 else packet.content
             )
             print(f"content : {content}")
-            if packet.type == MessageType.COMMAND.value:
+            packet_type = ReverseMessageTypeMapping.get(packet.type)
+
+            if packet_type == MessageType.COMMAND:
                 command = content.strip()
                 code = return_command_code(command)
 
@@ -101,8 +116,9 @@ async def handle_client(reader, writer):
                 if isinstance(packet.content, bytes)
                 else packet.content
             )
+            packet_type = ReverseMessageTypeMapping.get(packet.type)
 
-            if packet.type == MessageType.COMMAND.value:
+            if packet_type == MessageType.COMMAND:
                 command = content.strip()
                 code = return_command_code(command)
 

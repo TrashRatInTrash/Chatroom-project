@@ -6,15 +6,21 @@ from CONSTANTS import MessageType
 
 DELAY = 0.2
 
+# Map MessageType to numerical values
+MessageTypeMapping = {
+    MessageType.COMMAND: 0,
+    MessageType.MESSAGE: 1,
+    MessageType.ACK: 2,
+    MessageType.NACK: 3,
+    MessageType.RESP: 4,
+    MessageType.INFO: 5,
+}
+
 
 class ChatPacket(Packet):
     name = "ChatPacket"
     fields_desc = [
-        ByteEnumField(
-            "type",
-            0,
-            {0: "message", 1: "command", 2: "ack", 3: "nack", 4: "resp", 5: "info"},
-        ),
+        ByteEnumField("type", 0, MessageTypeMapping),
         ShortField("seq_num", 0),
         ShortField("content_length", 0),
         StrLenField("content", "", length_from=lambda pkt: pkt.content_length),
@@ -23,9 +29,7 @@ class ChatPacket(Packet):
 
 
 def create_checksum(pkt_type, seq_num, content_length, content):
-    # Ensure content is a string for checksum calculation
-    content_str = content.decode() if isinstance(content, bytes) else content
-    packet_str = f"{pkt_type}{seq_num}{content_length}{content_str}"
+    packet_str = f"{pkt_type}{seq_num}{content_length}{content}"
     return hashlib.sha256(packet_str.encode()).hexdigest()
 
 
@@ -34,13 +38,11 @@ def create_message(msg_type, content, seq_num, time_sent=None):
     print("Entered create_message function")
     if time_sent is None:
         time_sent = time.strftime("%H:%M:%S")
-    # Ensure content is a string for packet creation
-    content_str = content.decode() if isinstance(content, bytes) else content
     packet = ChatPacket(
-        type=msg_type.value,
+        type=MessageTypeMapping[msg_type],
         seq_num=seq_num,
-        content_length=len(content_str),
-        content=content_str,
+        content_length=len(content),
+        content=content,
     )
     # Manually calculate and set the checksum
     checksum = create_checksum(
