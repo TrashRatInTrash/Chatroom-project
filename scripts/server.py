@@ -19,34 +19,67 @@ def return_command_code(command):
         return 4
     if command == "/wrong":
         return 5
+    if command.startswith("/username"):
+        return 6
 
 
 async def handle_client(reader, writer):
     address = writer.get_extra_info("peername")
-    print(f"\nAccepted connection from {address}")
+    print(
+        f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nAccepted connection from {address}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    )
 
     client_seq_nums[address] = 0
     server_seq_nums[address] = 0
-
-    # Send a test message to the client
-    await message_handler.send_message(
-        writer,
-        MessageType.INFO,
-        "Test message from server",
-        client_seq_nums[address],
-    )
-    client_seq_nums[address] += 1
-
-    current_room = None
+    username = None
 
     try:
+        # Prompt for username
+        await message_handler.send_message(
+            writer,
+            MessageType.INFO,
+            "Please set your username with /username <your_username>",
+            client_seq_nums[address],
+        )
+        client_seq_nums[address] += 1
+
+        while True:
+            message = await message_handler.receive_message(
+                reader, server_seq_nums[address]
+            )
+            server_seq_nums[address] += 1
+
+            if message["type"] == MessageType.COMMAND.value:
+                command = message["content"].strip()
+                code = return_command_code(command)
+
+                if code == 6:  # Set username
+                    _, username = command.split(maxsplit=1)
+                    clients[address] = username
+                    await message_handler.send_message(
+                        writer,
+                        MessageType.RESP,
+                        f"Username set to {username}",
+                        client_seq_nums[address],
+                    )
+                    client_seq_nums[address] += 1
+                    break
+                else:
+                    await message_handler.send_message(
+                        writer,
+                        MessageType.RESP,
+                        "Please set your username first using /username <your_username>",
+                        client_seq_nums[address],
+                    )
+                    client_seq_nums[address] += 1
+
         while True:
             message = await message_handler.receive_message(
                 reader, server_seq_nums[address]
             )
             server_seq_nums[address] += 1
             print(
-                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nHandling message from {address}: {message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nHandling message from {username} ({address}): {message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
             )  # Debugging statement
 
             if message["type"] == MessageType.COMMAND.value:
@@ -122,7 +155,7 @@ async def handle_client(reader, writer):
                     client_seq_nums[address] += 1
             else:
                 if current_room:
-                    await broadcast(message["content"], address, current_room)
+                    await broadcast(message["content"], username, current_room)
                     await message_handler.send_message(
                         writer,
                         MessageType.ACK,
@@ -155,15 +188,16 @@ async def handle_client(reader, writer):
         print(f"Connection with {address} closed")
 
 
-async def broadcast(content, address, room_id):
+async def broadcast(content, username, room_id):
     for client in rooms.get(room_id, []):
+        client_address = client.get_extra_info("peername")
         await message_handler.send_message(
             client,
             MessageType.MESSAGE,
-            f"{address}: {content}",
-            client_seq_nums[address] + 1,
+            f"{username}: {content}",
+            client_seq_nums[client_address],
         )
-        client_seq_nums[address] += 1
+        client_seq_nums[client_address] += 1
 
 
 async def main():

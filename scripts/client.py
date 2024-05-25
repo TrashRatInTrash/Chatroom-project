@@ -20,7 +20,7 @@ async def receive_message(reader):
         while running:
             message = await message_handler.receive_message(reader, server_seq_num)
             server_seq_num += 1
-            print(f"Received message: {message["content"]}")  # Debugging statement
+            print(f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nReceived message: {message['content']}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")  # Debugging statement
     except Exception as e:
         print(f"Error receiving message: {e}")
 
@@ -28,6 +28,11 @@ def handle_user_input(writer):
     global running
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    
+    # Set username
+    username = input("Enter username: ")
+    loop.run_until_complete(send_message(writer, MessageType.COMMAND, f"/username {username}"))
+
     while running:
         message = input("Enter message: ")
         if message.startswith("/"):
