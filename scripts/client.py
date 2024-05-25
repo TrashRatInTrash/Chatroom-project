@@ -56,7 +56,7 @@ def handle_user_input(writer):
 
 async def main():
     global running
-    reader, writer = await asyncio.open_connection("127.0.0.1", 5555)
+    reader, writer = await asyncio.open_connection("192.168.28.83", 5555)
     print("Connected to server")
 
     input_thread = threading.Thread(target=handle_user_input, args=(writer,))
