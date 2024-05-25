@@ -1,15 +1,15 @@
-# message_handler.py
-
 import json
 import time
 import hashlib
 import socket
 from CONSTANTS import MessageType
 
-# Configurable timeout values
-SEND_TIMEOUT = 2  # seconds
-RECEIVE_TIMEOUT = 2  # seconds
-DELAY = 0.2  # delay in seconds for send and receive operations
+SEND_TIMEOUT = 2
+RECEIVE_TIMEOUT = 2
+DELAY = 0.2
+
+class ChecksumError(ValueError):
+    pass
 
 def create_checksum(message_dict):
     message_str = json.dumps(message_dict, sort_keys=True)
@@ -33,11 +33,11 @@ def parse_message(message_str):
     message_dict = json.loads(message_str)
     received_checksum = message_dict.pop("checksum", None)
     if received_checksum is None:
-        raise ValueError("No checksum found in the message.")
+        raise ChecksumError("No checksum found in the message.")
 
     calculated_checksum = create_checksum(message_dict)
     if received_checksum != calculated_checksum:
-        raise ValueError("Checksum does not match. The message may be corrupted.")
+        raise ChecksumError("Checksum does not match. The message may be corrupted.")
 
     message_dict["checksum"] = received_checksum
     return message_dict
@@ -50,7 +50,7 @@ def send_message(sock, msg_type, content, seq_num):
         try:
             print(f"\n~~~~~~~~~~~~~~~~\nSENDING {message_str}")
             sock.sendall(message_str.encode())
-            time.sleep(DELAY)  # artificial delay to better read logs in real time
+            time.sleep(DELAY)
             sock.settimeout(SEND_TIMEOUT)
             ack_message_str = sock.recv(1024).decode()
             ack_message = parse_message(ack_message_str)
@@ -64,7 +64,6 @@ def send_message(sock, msg_type, content, seq_num):
                 print(f"Unexpected ACK: {ack_message}")
         except socket.timeout:
             print("Timeout! Resending message.")
-            # don't break here, need to retransmit
         except BrokenPipeError:
             print("Connection closed by the server.")
             break
@@ -79,7 +78,7 @@ def receive_message(sock, expected_seq_num):
             if data:
                 message = parse_message(data)
                 print(f"\n~~~~~~~~~~~~~~~~\nRECEIVED {message}")
-                time.sleep(DELAY)  # artificial delay to better read logs in real time
+                time.sleep(DELAY)
                 if message["seq_num"] == expected_seq_num:
                     ack_message_str = create_message(
                         MessageType.ACK, "", message["seq_num"]
@@ -91,7 +90,7 @@ def receive_message(sock, expected_seq_num):
                         f"Unexpected seq_num: {message['seq_num']} (expected: {expected_seq_num})"
                     )
                     nack_message_str = create_message(
-                        MessageType.ACK, "", expected_seq_num - 1
+                        MessageType.NACK, "Sequence number mismatch", expected_seq_num
                     )
                     sock.sendall(nack_message_str.encode())
         except socket.timeout:
@@ -99,5 +98,11 @@ def receive_message(sock, expected_seq_num):
         except BrokenPipeError:
             print("Connection closed by the client.")
             break
+        except ChecksumError as ce:
+            print(f"Checksum error: {ce}")
+            nack_message_str = create_message(
+                MessageType.NACK, str(ce), expected_seq_num
+            )
+            sock.sendall(nack_message_str.encode())
         except Exception as e:
             print(f"Exception while receiving message: {e}")

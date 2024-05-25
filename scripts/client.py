@@ -32,6 +32,17 @@ def handle_command(sock, command):
         send_incorrect_checksum_message(
             sock, "This is a test message with incorrect checksum."
         )
+    elif command.startswith("/create"):
+        message_handler.send_message(
+            sock, MessageType.COMMAND, "/create", client_seq_num
+        )
+        client_seq_num += 1
+    elif command.startswith("/join"):
+        room_id = command.split()[1]
+        message_handler.send_message(
+            sock, MessageType.COMMAND, f"/join {room_id}", client_seq_num
+        )
+        client_seq_num += 1
     else:
         print("Unknown command")
     return True
@@ -66,11 +77,14 @@ def receive_messages(sock):
             message = message_handler.receive_message(sock, server_seq_num)
             if not message:
                 break
-            if message:
+            if message["type"] == MessageType.NACK.value:
+                print(f"NACK received for seq_num: {server_seq_num}, retransmitting...")
+                message_handler.send_message(
+                    sock, message["type"], message["content"], server_seq_num
+                )
+            else:
                 print(f"\nReceived: {message['content']} at {message['time_sent']}")
                 server_seq_num += 1
-            else:
-                print("\nReceived invalid data")
         except OSError:
             print("Connection closed by the server.")
             break
@@ -81,7 +95,7 @@ def receive_messages(sock):
 
 def main():
     host = "127.0.0.1"
-    port = 5554
+    port = 5555
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((host, port))
