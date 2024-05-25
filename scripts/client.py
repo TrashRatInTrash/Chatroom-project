@@ -8,10 +8,12 @@ client_seq_num = 0
 server_seq_num = 0
 running = True
 
+
 async def send_message(writer, msg_type, content):
     global client_seq_num
     await message_handler.send_message(writer, msg_type, content, client_seq_num)
     client_seq_num += 1
+
 
 async def receive_message(reader):
     global server_seq_num
@@ -20,39 +22,55 @@ async def receive_message(reader):
         while running:
             message = await message_handler.receive_message(reader, server_seq_num)
             server_seq_num += 1
-            print(f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nReceived message: {message['content']}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")  # Debugging statement
+            print(
+                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nReceived message: {message['content']}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+            )  # Debugging statement
     except Exception as e:
         print(f"Error receiving message: {e}")
+
 
 def handle_user_input(writer):
     global running
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     # Set username
     username = input("Enter username: ")
-    loop.run_until_complete(send_message(writer, MessageType.COMMAND, f"/username {username}"))
+    loop.run_until_complete(
+        send_message(writer, MessageType.COMMAND, f"/username {username}")
+    )
 
     while running:
         message = input("Enter message: ")
         if message.startswith("/"):
             command = message.strip()
             if command == "/qqq":
-                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
                 running = False
                 break
             elif command.startswith("/create"):
-                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
             elif command.startswith("/join"):
-                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
             elif command.startswith("/leave"):
-                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
             elif command == "/wrong":
-                loop.run_until_complete(send_message(writer, MessageType.COMMAND, command))
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
             else:
                 print("Unknown command")
         else:
             loop.run_until_complete(send_message(writer, MessageType.MESSAGE, message))
+
 
 async def main():
     global running
@@ -67,6 +85,7 @@ async def main():
     print("Closing connection")
     writer.close()
     await writer.wait_closed()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

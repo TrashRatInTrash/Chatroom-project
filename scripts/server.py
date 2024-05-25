@@ -32,8 +32,7 @@ async def handle_client(reader, writer):
     client_seq_nums[address] = 0
     server_seq_nums[address] = 0
     username = None
-
-    current_room = none
+    current_room = None
 
     try:
         # Prompt for username
@@ -46,16 +45,26 @@ async def handle_client(reader, writer):
         client_seq_nums[address] += 1
 
         while True:
-            message = await message_handler.receive_message(
+            packet = await message_handler.receive_message(
                 reader, server_seq_nums[address]
             )
             server_seq_nums[address] += 1
 
-            if message["type"] == MessageType.COMMAND.value:
-                command = message["content"].strip()
+            # Decode content if it's bytes
+            content = (
+                packet.content.decode()
+                if isinstance(packet.content, bytes)
+                else packet.content
+            )
+            print(f"content : {content}")
+            if packet.type == MessageType.COMMAND.value:
+                command = content.strip()
                 code = return_command_code(command)
 
+                print(f"code == {code}")
+
                 if code == 6:  # Set username
+                    print("\n code == 6 if statement\n")
                     _, username = command.split(maxsplit=1)
                     clients[address] = username
                     await message_handler.send_message(
@@ -67,6 +76,7 @@ async def handle_client(reader, writer):
                     client_seq_nums[address] += 1
                     break
                 else:
+                    print("\n code == 6 else statement\n")
                     await message_handler.send_message(
                         writer,
                         MessageType.RESP,
@@ -76,16 +86,24 @@ async def handle_client(reader, writer):
                     client_seq_nums[address] += 1
 
         while True:
-            message = await message_handler.receive_message(
+            print("\n~~~~~~~~~~~\nentered main receive loop\n~~~~~~~~~~~\n")
+            packet = await message_handler.receive_message(
                 reader, server_seq_nums[address]
             )
             server_seq_nums[address] += 1
             print(
-                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nHandling message from {username} ({address}): {message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-            )  # Debugging statement
+                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nHandling message from {username} ({address}): {packet}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+            )
 
-            if message["type"] == MessageType.COMMAND.value:
-                command = message["content"].strip()
+            # Decode content if it's bytes
+            content = (
+                packet.content.decode()
+                if isinstance(packet.content, bytes)
+                else packet.content
+            )
+
+            if packet.type == MessageType.COMMAND.value:
+                command = content.strip()
                 code = return_command_code(command)
 
                 if code == 1:  # Hard disconnect
@@ -157,7 +175,7 @@ async def handle_client(reader, writer):
                     client_seq_nums[address] += 1
             else:
                 if current_room:
-                    await broadcast(message["content"], username, current_room)
+                    await broadcast(content, username, current_room)
                     await message_handler.send_message(
                         writer,
                         MessageType.ACK,
