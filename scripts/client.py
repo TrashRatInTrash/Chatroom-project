@@ -1,6 +1,6 @@
 import asyncio
 import message_handler
-from CONSTANTS import MessageType
+from CONSTANTS import MessageType, address, port
 import threading
 
 client_seq_num = 0
@@ -148,7 +148,7 @@ async def send_message_with_incorrect_checksum(writer, msg_type, content):
 
 async def main():
     global running
-    reader, writer = await asyncio.open_connection("127.0.0.1", 5555)
+    reader, writer = await asyncio.open_connection(address, port)
     print("Connected to server")
 
     input_thread = threading.Thread(target=handle_user_input, args=(writer,))

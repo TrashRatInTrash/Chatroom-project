@@ -1,7 +1,6 @@
 import asyncio
 import message_handler
-from CONSTANTS import MessageType
-import json
+from CONSTANTS import MessageType, address, port
 import threading
 import tkinter as tk
 from tkinter import scrolledtext
@@ -11,6 +10,9 @@ server_seq_num = 0
 running = True
 username_set = False
 sent_packets = {}  # Store sent packets for potential retransmission
+heartbeat_interval = 5  # Interval in seconds between heartbeats
+heartbeat_timeout = 10  # Timeout in seconds to wait for a heartbeat response
+last_heartbeat_ack = None  # Timestamp of the last heartbeat acknowledgment
 
 MessageTypeMapping = {
     MessageType.COMMAND: 0,
@@ -19,6 +21,7 @@ MessageTypeMapping = {
     MessageType.NACK: 3,
     MessageType.RESP: 4,
     MessageType.INFO: 5,
+    MessageType.HEARTBEAT: 6,  # Add HEARTBEAT message type
 }
 
 ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
@@ -36,6 +39,7 @@ async def send_message(writer, msg_type, content):
 async def receive_message(reader, message_display, writer):
     global server_seq_num
     global running
+    global last_heartbeat_ack
     try:
         while running:
             packet = await message_handler.receive_message(reader, server_seq_num)
@@ -43,12 +47,22 @@ async def receive_message(reader, message_display, writer):
 
             if packet_type == MessageType.NACK:
                 expected_seq_num = int(packet.content.split()[-1])
+                print(f"Received NACK for seq_num {expected_seq_num}")
                 if expected_seq_num in sent_packets:
+                    print("Retransmitting packet...")
                     await retransmit_packet(writer, sent_packets[expected_seq_num])
                 continue  # Do not increment server_seq_num on NACK
 
             if packet.seq_num != server_seq_num:
+                print(
+                    f"Sequence number mismatch, expected {server_seq_num}, received {packet.seq_num}. Sending NACK."
+                )
                 await send_nack(writer, server_seq_num)
+                continue
+
+            if packet_type == MessageType.HEARTBEAT:
+                last_heartbeat_ack = asyncio.get_event_loop().time()
+                print("Received heartbeat acknowledgment")
                 continue
 
             server_seq_num += 1
@@ -70,6 +84,26 @@ async def send_nack(writer, expected_seq_num):
 async def retransmit_packet(writer, packet):
     writer.write(bytes(packet))
     await writer.drain()
+
+
+async def send_heartbeat(writer):
+    while running:
+        await send_message(writer, MessageType.HEARTBEAT, "heartbeat")
+        await asyncio.sleep(heartbeat_interval)
+
+
+async def monitor_heartbeat():
+    global running
+    global last_heartbeat_ack
+    while running:
+        if (
+            last_heartbeat_ack is not None
+            and (asyncio.get_event_loop().time() - last_heartbeat_ack)
+            > heartbeat_timeout
+        ):
+            print("No heartbeat acknowledgment received. Connection might be down.")
+            running = False
+        await asyncio.sleep(heartbeat_interval)
 
 
 def handle_user_input(writer, message_entry, message_display):
@@ -129,6 +163,10 @@ def handle_user_input(writer, message_entry, message_display):
                     loop.run_until_complete(
                         send_message(writer, MessageType.COMMAND, command)
                     )
+                elif command.startswith("/kick"):
+                    loop.run_until_complete(
+                        send_message(writer, MessageType.COMMAND, command)
+                    )
                 else:
                     message_display.config(state=tk.NORMAL)
                     message_display.insert(tk.END, "Unknown command\n")
@@ -144,14 +182,20 @@ def handle_user_input(writer, message_entry, message_display):
 async def send_message_with_incorrect_checksum(writer, msg_type, content):
     global client_seq_num
     packet = message_handler.create_message(msg_type, content, client_seq_num)
-    packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
+    sent_packets[client_seq_num] = packet  # Store the packet first
+    print(
+        f"Stored packet with seq_num {client_seq_num} in sent_packets (before modifying checksum): {packet.summary()}"
+    )
+    packet.checksum = b"incorrect_checksum"  # Modify the checksum
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
 
 
 async def start_network(reader, writer, message_display):
-    await receive_message(reader, message_display,writer)
+    asyncio.create_task(send_heartbeat(writer))
+    asyncio.create_task(monitor_heartbeat())
+    await receive_message(reader, message_display, writer)
 
 
 def main():
@@ -177,9 +221,7 @@ def main():
     close_button.grid(row=1, column=2, padx=10, pady=10)
 
     loop = asyncio.get_event_loop()
-    reader, writer = loop.run_until_complete(
-        asyncio.open_connection("192.168.28.83", 5555)
-    )
+    reader, writer = loop.run_until_complete(asyncio.open_connection(address, port))
     print("Connected to server")
 
     send_input = handle_user_input(writer, message_entry, message_display)

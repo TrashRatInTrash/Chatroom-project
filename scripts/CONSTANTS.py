@@ -15,3 +15,8 @@ class MessageType(Enum):
     NACK = "nack"
     RESP = "resp"
     INFO = "info"
+    HEARTBEAT = "heartbeat"
+
+
+address = "127.0.0.1"
+port = 5555
