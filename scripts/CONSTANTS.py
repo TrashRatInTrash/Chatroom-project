@@ -17,6 +17,6 @@ class MessageType(Enum):
     INFO = "info"
     HEARTBEAT = "heartbeat"
 
-
+# 192.168.28.83
 address = "127.0.0.1"
 port = 5555
