@@ -185,13 +185,13 @@ async def handle_client(reader, writer):
                 else:
                     if current_room:
                         await broadcast(content, username, current_room)
-                        # await send_and_store_message(
-                        #     writer,
-                        #     MessageType.ACK,
-                        #     "Message received",
-                        #     client_seq_nums[address],
-                        # )
-                        # client_seq_nums[address] += 1
+                        await send_and_store_message(
+                            writer,
+                            MessageType.ACK,
+                            "Message received",
+                            client_seq_nums[address],
+                        )
+                        #client_seq_nums[address] += 1
                     else:
                         await send_and_store_message(
                             writer,
