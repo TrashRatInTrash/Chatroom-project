@@ -11,8 +11,6 @@ server_seq_num = 0
 running = True
 username_set = False
 sent_packets = {}  # Store sent packets for potential retransmission
-received_packets = {}  # Store received packets for potential retransmission
-
 
 async def send_message(writer, msg_type, content):
     global client_seq_num
@@ -21,7 +19,6 @@ async def send_message(writer, msg_type, content):
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
-
 
 async def receive_message(reader, message_display):
     global server_seq_num
@@ -45,19 +42,14 @@ async def receive_message(reader, message_display):
     except Exception as e:
         print(f"Error receiving message: {e}")
 
-
 async def send_nack(writer, expected_seq_num):
-    nack_message = message_handler.create_message(
-        MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num
-    )
+    nack_message = message_handler.create_message(MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num)
     writer.write(bytes(nack_message))
     await writer.drain()
-
 
 async def retransmit_packet(writer, packet):
     writer.write(bytes(packet))
     await writer.drain()
-
 
 def handle_user_input(writer, message_entry, message_display):
     global running
@@ -106,11 +98,7 @@ def handle_user_input(writer, message_entry, message_display):
                     )
                 elif command == "/wrong":
                     loop.run_until_complete(
-                        send_message_with_incorrect_checksum(
-                            writer,
-                            MessageType.MESSAGE,
-                            "Test message with incorrect checksum",
-                        )
+                        send_message_with_incorrect_checksum(writer, MessageType.MESSAGE, "Test message with incorrect checksum")
                     )
                 elif command == "/users":
                     loop.run_until_complete(
@@ -127,19 +115,16 @@ def handle_user_input(writer, message_entry, message_display):
 
     return send_input
 
-
 async def send_message_with_incorrect_checksum(writer, msg_type, content):
     global client_seq_num
     packet = message_handler.create_message(msg_type, content, client_seq_num)
-    packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
+    packet.checksum = b'incorrect_checksum'  # Intentionally set an incorrect checksum
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
 
-
 async def start_network(reader, writer, message_display):
     await receive_message(reader, message_display)
-
 
 def main():
     global running
@@ -167,7 +152,7 @@ def main():
     close_button.grid(row=1, column=2, padx=10, pady=10)
 
     loop = asyncio.get_event_loop()
-    reader, writer = loop.run_until_complete(asyncio.open_connection("127.0.0.1", 5555))
+    reader, writer = loop.run_until_complete(asyncio.open_connection("192.168.28.83", 5555))
     print("Connected to server")
 
     send_input = handle_user_input(writer, message_entry, message_display)
@@ -188,7 +173,6 @@ def main():
     running = False
     network_thread.join()
 
-
 def on_closing(writer, root):
     global running
     running = False
@@ -196,7 +180,6 @@ def on_closing(writer, root):
         writer.close()
         asyncio.run(writer.wait_closed())
     root.destroy()
-
 
 if __name__ == "__main__":
     main()

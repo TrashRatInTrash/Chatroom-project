@@ -19,7 +19,6 @@ MessageTypeMapping = {
 
 ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
 
-
 def return_command_code(command):
     if command == "/qqq":
         return 1
@@ -35,7 +34,6 @@ def return_command_code(command):
         return 6
     if command == "/users":
         return 8
-
 
 async def handle_client(reader, writer):
     address = writer.get_extra_info("peername")
@@ -62,11 +60,7 @@ async def handle_client(reader, writer):
                 )
                 server_seq_nums[address] += 1
 
-                content = (
-                    packet.content.decode()
-                    if isinstance(packet.content, bytes)
-                    else packet.content
-                )
+                content = packet.content.decode() if isinstance(packet.content, bytes) else packet.content
                 packet_type = ReverseMessageTypeMapping.get(packet.type)
 
                 if packet_type == MessageType.COMMAND:
@@ -102,11 +96,7 @@ async def handle_client(reader, writer):
                 )
                 server_seq_nums[address] += 1
 
-                content = (
-                    packet.content.decode()
-                    if isinstance(packet.content, bytes)
-                    else packet.content
-                )
+                content = packet.content.decode() if isinstance(packet.content, bytes) else packet.content
                 packet_type = ReverseMessageTypeMapping.get(packet.type)
 
                 if packet_type == MessageType.COMMAND:
@@ -227,22 +217,17 @@ async def handle_client(reader, writer):
             del server_seq_nums[address]
         print(f"Connection with {address} closed")
 
-
 async def send_and_store_message(writer, msg_type, content, seq_num):
     packet = message_handler.create_message(msg_type, content, seq_num)
-    sent_packets[(writer.get_extra_info("peername"), seq_num)] = (
-        packet  # Store the packet
-    )
+    sent_packets[(writer.get_extra_info("peername"), seq_num)] = packet  # Store the packet
     writer.write(bytes(packet))
     await writer.drain()
-
 
 async def retransmit_packet(writer, seq_num):
     packet_key = (writer.get_extra_info("peername"), seq_num)
     if packet_key in sent_packets:
         writer.write(bytes(sent_packets[packet_key]))
         await writer.drain()
-
 
 async def broadcast(content, username, room_id):
     for client in rooms.get(room_id, []):
@@ -255,13 +240,11 @@ async def broadcast(content, username, room_id):
         )
         client_seq_nums[client_address] += 1
 
-
 async def main():
     server = await asyncio.start_server(handle_client, "0.0.0.0", 5555)
     print("Server listening on 0.0.0.0:5555")
     async with server:
         await server.serve_forever()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
