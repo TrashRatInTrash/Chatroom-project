@@ -1,14 +1,12 @@
 import asyncio
 import message_handler
 from CONSTANTS import MessageType
-import json
 import threading
 
 client_seq_num = 0
 server_seq_num = 0
 running = True
-sent_packets = {}  # Store sent packets for potential retransmission
-username_set = False
+sent_packets = {}
 
 MessageTypeMapping = {
     MessageType.COMMAND: 0,
@@ -25,7 +23,10 @@ ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
 async def send_message(writer, msg_type, content):
     global client_seq_num
     packet = message_handler.create_message(msg_type, content, client_seq_num)
-    sent_packets[client_seq_num] = packet  # Store the packet
+    sent_packets[client_seq_num] = packet
+    print(
+        f"Stored packet with seq_num {client_seq_num} in sent_packets: {packet.summary()}"
+    )
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
@@ -41,9 +42,9 @@ async def receive_message(reader, writer):
 
             if packet_type == MessageType.NACK:
                 expected_seq_num = int(packet.content.split()[-1])
-                if expected_seq_num in sent_packets:
-                    await retransmit_packet(writer, sent_packets[expected_seq_num])
-                continue  # Do not increment server_seq_num on NACK
+                print(f" seq num from nack {expected_seq_num}")
+                await retransmit_packet(writer, expected_seq_num)
+                continue
 
             if packet.seq_num != server_seq_num:
                 await send_nack(writer, server_seq_num)
@@ -63,23 +64,30 @@ async def send_nack(writer, expected_seq_num):
     await writer.drain()
 
 
-async def retransmit_packet(writer, packet):
-    writer.write(bytes(packet))
-    await writer.drain()
+async def retransmit_packet(writer, seq_num):
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+    print(f"Entered retransmit_packet function for seq_num {seq_num}")
+    for key, packet in sent_packets.items():
+        print(f"Seq Num: {key}, Packet: {packet.content}")
+    if seq_num in sent_packets:
+        packet = sent_packets[seq_num]
+        print(
+            f"Retransmitting packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
+        )
+        writer.write(bytes(packet))
+        await writer.drain()
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
 
 
 def handle_user_input(writer):
     global running
-    global username_set
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # Set username
     username = input("Enter username: ")
     loop.run_until_complete(
         send_message(writer, MessageType.COMMAND, f"/username {username}")
     )
-    username_set = True
 
     while running:
         message = input("Enter message: ")
@@ -105,9 +113,17 @@ def handle_user_input(writer):
                 )
             elif command == "/wrong":
                 loop.run_until_complete(
-                    send_message_with_incorrect_checksum(writer, MessageType.MESSAGE, "Test message with incorrect checksum")
+                    send_message_with_incorrect_checksum(
+                        writer,
+                        MessageType.MESSAGE,
+                        "Test message with incorrect checksum",
+                    )
                 )
             elif command == "/users":
+                loop.run_until_complete(
+                    send_message(writer, MessageType.COMMAND, command)
+                )
+            elif command.startswith("/kick"):
                 loop.run_until_complete(
                     send_message(writer, MessageType.COMMAND, command)
                 )
@@ -120,7 +136,11 @@ def handle_user_input(writer):
 async def send_message_with_incorrect_checksum(writer, msg_type, content):
     global client_seq_num
     packet = message_handler.create_message(msg_type, content, client_seq_num)
-    packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
+    sent_packets[client_seq_num] = packet  # Store the packet first
+    print(
+        f"Stored packet with seq_num {client_seq_num} in sent_packets (before modifying checksum): {packet.summary()}"
+    )
+    packet.checksum = b"incorrect_checksum"  # Modify the checksum
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
@@ -128,7 +148,7 @@ async def send_message_with_incorrect_checksum(writer, msg_type, content):
 
 async def main():
     global running
-    reader, writer = await asyncio.open_connection("192.168.28.83", 5555)
+    reader, writer = await asyncio.open_connection("127.0.0.1", 5555)
     print("Connected to server")
 
     input_thread = threading.Thread(target=handle_user_input, args=(writer,))

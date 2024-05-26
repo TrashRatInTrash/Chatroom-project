@@ -6,7 +6,10 @@ clients = {}
 client_seq_nums = {}
 server_seq_nums = {}
 rooms = {}
-sent_packets = {}  # Store sent packets for potential retransmission
+sent_packets = {}
+nack_retries = {}
+
+NACK_LIMIT = 5
 
 MessageTypeMapping = {
     MessageType.COMMAND: 0,
@@ -18,6 +21,7 @@ MessageTypeMapping = {
 }
 
 ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
+
 
 def return_command_code(command):
     if command == "/qqq":
@@ -34,13 +38,15 @@ def return_command_code(command):
         return 6
     if command == "/users":
         return 8
+    if command.startswith("/kick"):
+        return 9
+
 
 async def handle_client(reader, writer):
     address = writer.get_extra_info("peername")
-    print(f"\nAccepted connection from {address}\n")
-
     client_seq_nums[address] = 0
     server_seq_nums[address] = 0
+    nack_retries[address] = {}
     username = None
     current_room = None
 
@@ -58,9 +64,23 @@ async def handle_client(reader, writer):
                 packet = await message_handler.receive_message(
                     reader, server_seq_nums[address]
                 )
-                server_seq_nums[address] += 1
+                packet_type = ReverseMessageTypeMapping.get(packet.type)
 
-                content = packet.content.decode() if isinstance(packet.content, bytes) else packet.content
+                if packet_type == MessageType.NACK:
+                    expected_seq_num = int(packet.content.split()[-1])
+                    await retransmit_packet(writer, expected_seq_num)
+                    continue
+
+                if packet.seq_num != server_seq_nums[address]:
+                    await handle_nack(writer, address, server_seq_nums[address])
+                    continue
+
+                server_seq_nums[address] += 1
+                content = (
+                    packet.content.decode()
+                    if isinstance(packet.content, bytes)
+                    else packet.content
+                )
                 packet_type = ReverseMessageTypeMapping.get(packet.type)
 
                 if packet_type == MessageType.COMMAND:
@@ -78,6 +98,7 @@ async def handle_client(reader, writer):
                         )
                         client_seq_nums[address] += 1
                         break
+
                     else:
                         await send_and_store_message(
                             writer,
@@ -87,16 +108,30 @@ async def handle_client(reader, writer):
                         )
                         client_seq_nums[address] += 1
             except ValueError as e:
-                await message_handler.send_nack(writer, server_seq_nums[address])
+                await handle_nack(writer, address, server_seq_nums[address])
 
         while True:
             try:
                 packet = await message_handler.receive_message(
                     reader, server_seq_nums[address]
                 )
-                server_seq_nums[address] += 1
+                packet_type = ReverseMessageTypeMapping.get(packet.type)
 
-                content = packet.content.decode() if isinstance(packet.content, bytes) else packet.content
+                if packet_type == MessageType.NACK:
+                    expected_seq_num = int(packet.content.split()[-1])
+                    await retransmit_packet(writer, expected_seq_num)
+                    continue
+
+                if packet.seq_num != server_seq_nums[address]:
+                    await handle_nack(writer, address, server_seq_nums[address])
+                    continue
+
+                server_seq_nums[address] += 1
+                content = (
+                    packet.content.decode()
+                    if isinstance(packet.content, bytes)
+                    else packet.content
+                )
                 packet_type = ReverseMessageTypeMapping.get(packet.type)
 
                 if packet_type == MessageType.COMMAND:
@@ -112,6 +147,9 @@ async def handle_client(reader, writer):
                         )
                         client_seq_nums[address] += 1
                         break
+                    elif code == 9:  # Kick user
+                        target_username = command.split()[1]
+                        await kick_user(target_username)
                     elif code == 2:  # Create room
                         room_id = f"room_{len(rooms) + 1}"
                         rooms[room_id] = [writer]
@@ -179,9 +217,6 @@ async def handle_client(reader, writer):
                             client_seq_nums[address],
                         )
                         client_seq_nums[address] += 1
-                elif packet_type == MessageType.NACK:
-                    expected_seq_num = int(content.split()[-1])
-                    await retransmit_packet(writer, expected_seq_num)
                 else:
                     if current_room:
                         await broadcast(content, username, current_room)
@@ -191,7 +226,7 @@ async def handle_client(reader, writer):
                             "Message received",
                             client_seq_nums[address],
                         )
-                        #client_seq_nums[address] += 1
+                        client_seq_nums[address] += 1
                     else:
                         await send_and_store_message(
                             writer,
@@ -201,7 +236,7 @@ async def handle_client(reader, writer):
                         )
                         client_seq_nums[address] += 1
             except ValueError as e:
-                await message_handler.send_nack(writer, server_seq_nums[address])
+                await handle_nack(writer, address, server_seq_nums[address])
     except Exception as e:
         print(f"Exception: {e}")
     finally:
@@ -209,22 +244,62 @@ async def handle_client(reader, writer):
             rooms[current_room].remove(writer)
         writer.close()
         await writer.wait_closed()
-        del clients[address]
-        del client_seq_nums[address]
-        del server_seq_nums[address]
+        if address in clients:
+            del clients[address]
+        if address in client_seq_nums:
+            del client_seq_nums[address]
+        if address in server_seq_nums:
+            del server_seq_nums[address]
+        if address in nack_retries:
+            del nack_retries[address]
         print(f"Connection with {address} closed")
+
 
 async def send_and_store_message(writer, msg_type, content, seq_num):
     packet = message_handler.create_message(msg_type, content, seq_num)
-    sent_packets[(writer.get_extra_info("peername"), seq_num)] = packet  # Store the packet
+    sent_packets[(writer.get_extra_info("peername"), seq_num)] = packet
     writer.write(bytes(packet))
     await writer.drain()
 
+
 async def retransmit_packet(writer, seq_num):
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+    print(f"Entered retransmit_packet function for seq_num {seq_num}")
     packet_key = (writer.get_extra_info("peername"), seq_num)
     if packet_key in sent_packets:
-        writer.write(bytes(sent_packets[packet_key]))
+        packet = sent_packets[packet_key]
+        print(
+            f"Retransmitting packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
+        )
+        writer.write(bytes(packet))
         await writer.drain()
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+
+
+async def handle_nack(writer, address, seq_num):
+    if address not in nack_retries:
+        nack_retries[address] = {}
+    if seq_num not in nack_retries[address]:
+        nack_retries[address][seq_num] = 0
+
+    nack_retries[address][seq_num] += 1
+
+    if nack_retries[address][seq_num] <= NACK_LIMIT:
+        await message_handler.send_nack(writer, seq_num)
+    else:
+        print(f"Too many NACKs for {address}, disconnecting user.")
+        writer.close()
+        await writer.wait_closed()
+        if address in clients:
+            del clients[address]
+        if address in client_seq_nums:
+            del client_seq_nums[address]
+        if address in server_seq_nums:
+            del server_seq_nums[address]
+        if address in nack_retries:
+            del nack_retries[address]
+        print(f"Connection with {address} closed due to too many NACKs.")
+
 
 async def broadcast(content, username, room_id):
     for client in rooms.get(room_id, []):
@@ -237,11 +312,46 @@ async def broadcast(content, username, room_id):
         )
         client_seq_nums[client_address] += 1
 
+
+async def kick_user(username):
+    for address, user in clients.items():
+        if user == username:
+            writer = None
+            for writer_key in rooms.values():
+                for w in writer_key:
+                    if w.get_extra_info("peername") == address:
+                        writer = w
+                        break
+                if writer:
+                    break
+            if writer:
+                await send_and_store_message(
+                    writer,
+                    MessageType.COMMAND,
+                    "You have been kicked by the server",
+                    client_seq_nums[address],
+                )
+                writer.close()
+                await writer.wait_closed()
+                if address in clients:
+                    del clients[address]
+                if address in client_seq_nums:
+                    del client_seq_nums[address]
+                if address in server_seq_nums:
+                    del server_seq_nums[address]
+                if address in nack_retries:
+                    del nack_retries[address]
+                print(f"User {username} kicked from the server.")
+                return
+    print(f"User {username} not found.")
+
+
 async def main():
     server = await asyncio.start_server(handle_client, "0.0.0.0", 5555)
     print("Server listening on 0.0.0.0:5555")
     async with server:
         await server.serve_forever()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -6,7 +6,6 @@ from CONSTANTS import MessageType
 
 DELAY = 0.2
 
-# Map MessageType to numerical values
 MessageTypeMapping = {
     MessageType.COMMAND: 0,
     MessageType.MESSAGE: 1,
@@ -34,29 +33,41 @@ def create_checksum(pkt_type, seq_num, content_length, content):
 
 
 def create_message(msg_type, content, seq_num, time_sent=None):
-    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
-    print("Entered create_message function")
-    if time_sent is None:
-        time_sent = time.strftime("%H:%M:%S")
-    packet = ChatPacket(
-        type=MessageTypeMapping[msg_type],
-        seq_num=seq_num,
-        content_length=len(content),
-        content=content,
-    )
-    # Manually calculate and set the checksum
-    checksum = create_checksum(
-        packet.type, packet.seq_num, packet.content_length, packet.content
-    )
-    packet.checksum = checksum.encode()
-    print(
-        f"Created message packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
-    )
-    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
-    return packet
+    time.sleep(DELAY)
+    try:
+        print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+        print("Entered create_message function")
+        print(
+            f"msg_type: {msg_type}, content: {content}, seq_num: {seq_num}, time_sent: {time_sent}"
+        )
+
+        if time_sent is None:
+            time_sent = time.strftime("%H:%M:%S")
+
+        packet = ChatPacket(
+            type=MessageTypeMapping[msg_type],
+            seq_num=seq_num,
+            content_length=len(content),
+            content=content,
+        )
+
+        checksum = create_checksum(
+            packet.type, packet.seq_num, packet.content_length, packet.content
+        )
+        packet.checksum = checksum.encode()
+
+        print(
+            f"Created message packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
+        )
+        print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+        return packet
+    except Exception as e:
+        print(f"Exception in create_message: {e}")
+        raise
 
 
 def parse_message(data):
+    time.sleep(DELAY)
     print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
     print("Entered parse_message function")
     packet = ChatPacket(data)
@@ -64,7 +75,6 @@ def parse_message(data):
         f"Parsed raw message packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
     )
     received_checksum = packet.checksum.decode()
-    # Manually calculate the checksum for verification
     calculated_checksum = create_checksum(
         packet.type, packet.seq_num, packet.content_length, packet.content
     )
@@ -76,6 +86,7 @@ def parse_message(data):
 
 
 async def send_message(writer, msg_type, content, seq_num):
+    time.sleep(DELAY)
     print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
     print("Entered send_message function")
     address = writer.get_extra_info("peername")
@@ -93,19 +104,16 @@ async def send_message(writer, msg_type, content, seq_num):
 
 
 async def receive_message(reader, expected_seq_num):
+    time.sleep(DELAY)
     print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
     print("Entered receive_message function")
-    data = await reader.read(
-        1024
-    )  # Read a larger buffer to ensure we capture the whole packet
+    data = await reader.read(1024)
     print(f"\nRaw data received: {data}\n")
     message = parse_message(data)
-
-    if message.type == MessageTypeMapping[MessageType.NACK]:
-        print(f"Received NACK for seq_num {expected_seq_num}")
-        return message  # Return the NACK message without checking the sequence number
-
     if message.seq_num != expected_seq_num:
+        if message.type == MessageTypeMapping[MessageType.NACK]:
+            print(f"Received NACK for seq_num {message.seq_num}, retransmitting...")
+            return message  # Return the NACK message without raising an error
         raise ValueError(
             f"Sequence number mismatch, expected {expected_seq_num} received {message.seq_num}"
         )
@@ -117,8 +125,12 @@ async def receive_message(reader, expected_seq_num):
 
 
 async def send_nack(writer, expected_seq_num):
+    time.sleep(DELAY)
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+    print("Entered send_nack function")
     nack_message = create_message(
         MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num
     )
     writer.write(bytes(nack_message))
     await writer.drain()
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
