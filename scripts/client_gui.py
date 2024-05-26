@@ -10,28 +10,16 @@ client_seq_num = 0
 server_seq_num = 0
 running = True
 username_set = False
-
-
-clients = {}
-client_seq_nums = {}
-server_seq_nums = {}
-rooms = {}
-
-MessageTypeMapping = {
-    MessageType.COMMAND: 0,
-    MessageType.MESSAGE: 1,
-    MessageType.ACK: 2,
-    MessageType.NACK: 3,
-    MessageType.RESP: 4,
-    MessageType.INFO: 5,
-}
-
-ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
+sent_packets = {}  # Store sent packets for potential retransmission
+received_packets = {}  # Store received packets for potential retransmission
 
 
 async def send_message(writer, msg_type, content):
     global client_seq_num
-    await message_handler.send_message(writer, msg_type, content, client_seq_num)
+    packet = message_handler.create_message(msg_type, content, client_seq_num)
+    sent_packets[client_seq_num] = packet  # Store the packet
+    writer.write(bytes(packet))
+    await writer.drain()
     client_seq_num += 1
 
 
@@ -41,12 +29,34 @@ async def receive_message(reader, message_display):
     try:
         while running:
             packet = await message_handler.receive_message(reader, server_seq_num)
+            if packet.seq_num != server_seq_num:
+                await send_nack(writer, server_seq_num)
+                continue
             server_seq_num += 1
             message_display.config(state=tk.NORMAL)
             message_display.insert(tk.END, f"Received: {packet.content}\n")
             message_display.config(state=tk.DISABLED)
+
+            # Handle NACK message
+            if packet.type == MessageTypeMapping[MessageType.NACK]:
+                expected_seq_num = int(packet.content.split()[-1])
+                if expected_seq_num in sent_packets:
+                    await retransmit_packet(writer, sent_packets[expected_seq_num])
     except Exception as e:
         print(f"Error receiving message: {e}")
+
+
+async def send_nack(writer, expected_seq_num):
+    nack_message = message_handler.create_message(
+        MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num
+    )
+    writer.write(bytes(nack_message))
+    await writer.drain()
+
+
+async def retransmit_packet(writer, packet):
+    writer.write(bytes(packet))
+    await writer.drain()
 
 
 def handle_user_input(writer, message_entry, message_display):
@@ -122,9 +132,6 @@ async def send_message_with_incorrect_checksum(writer, msg_type, content):
     global client_seq_num
     packet = message_handler.create_message(msg_type, content, client_seq_num)
     packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
-    print(
-        f"Sending INCORRECT CHECKSUM message packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
-    )
     writer.write(bytes(packet))
     await writer.drain()
     client_seq_num += 1
@@ -151,17 +158,23 @@ def main():
     send_button = tk.Button(root, text="Send")
     send_button.grid(row=1, column=1, padx=10, pady=10)
 
+    send_incorrect_button = tk.Button(root, text="Send Incorrect Checksum")
+    send_incorrect_button.grid(row=2, column=1, padx=10, pady=10)
+
     close_button = tk.Button(
         root, text="Close", command=lambda: on_closing(writer, root)
     )
     close_button.grid(row=1, column=2, padx=10, pady=10)
 
     loop = asyncio.get_event_loop()
-    reader, writer = loop.run_until_complete(asyncio.open_connection("192.168.28.83", 5555))
+    reader, writer = loop.run_until_complete(asyncio.open_connection("127.0.0.1", 5555))
     print("Connected to server")
 
     send_input = handle_user_input(writer, message_entry, message_display)
     send_button.config(command=send_input)
+
+    send_incorrect_input = handle_incorrect_checksum_input(writer, message_entry)
+    send_incorrect_button.config(command=send_incorrect_input)
 
     network_thread = threading.Thread(
         target=loop.run_until_complete,
