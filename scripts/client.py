@@ -7,30 +7,70 @@ import threading
 client_seq_num = 0
 server_seq_num = 0
 running = True
+sent_packets = {}  # Store sent packets for potential retransmission
+username_set = False
+
+MessageTypeMapping = {
+    MessageType.COMMAND: 0,
+    MessageType.MESSAGE: 1,
+    MessageType.ACK: 2,
+    MessageType.NACK: 3,
+    MessageType.RESP: 4,
+    MessageType.INFO: 5,
+}
+
+ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
 
 
 async def send_message(writer, msg_type, content):
     global client_seq_num
-    await message_handler.send_message(writer, msg_type, content, client_seq_num)
+    packet = message_handler.create_message(msg_type, content, client_seq_num)
+    sent_packets[client_seq_num] = packet  # Store the packet
+    writer.write(bytes(packet))
+    await writer.drain()
     client_seq_num += 1
 
 
-async def receive_message(reader):
+async def receive_message(reader, writer):
     global server_seq_num
     global running
     try:
         while running:
-            message = await message_handler.receive_message(reader, server_seq_num)
+            packet = await message_handler.receive_message(reader, server_seq_num)
+            packet_type = ReverseMessageTypeMapping.get(packet.type)
+
+            if packet_type == MessageType.NACK:
+                expected_seq_num = int(packet.content.split()[-1])
+                if expected_seq_num in sent_packets:
+                    await retransmit_packet(writer, sent_packets[expected_seq_num])
+                continue  # Do not increment server_seq_num on NACK
+
+            if packet.seq_num != server_seq_num:
+                await send_nack(writer, server_seq_num)
+                continue
+
             server_seq_num += 1
-            print(
-                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nReceived message: {message['content']}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-            )  # Debugging statement
+            print(f"Received: {packet.content}")
     except Exception as e:
         print(f"Error receiving message: {e}")
 
 
+async def send_nack(writer, expected_seq_num):
+    nack_message = message_handler.create_message(
+        MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num
+    )
+    writer.write(bytes(nack_message))
+    await writer.drain()
+
+
+async def retransmit_packet(writer, packet):
+    writer.write(bytes(packet))
+    await writer.drain()
+
+
 def handle_user_input(writer):
     global running
+    global username_set
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -39,6 +79,7 @@ def handle_user_input(writer):
     loop.run_until_complete(
         send_message(writer, MessageType.COMMAND, f"/username {username}")
     )
+    username_set = True
 
     while running:
         message = input("Enter message: ")
@@ -64,12 +105,25 @@ def handle_user_input(writer):
                 )
             elif command == "/wrong":
                 loop.run_until_complete(
+                    send_message_with_incorrect_checksum(writer, MessageType.MESSAGE, "Test message with incorrect checksum")
+                )
+            elif command == "/users":
+                loop.run_until_complete(
                     send_message(writer, MessageType.COMMAND, command)
                 )
             else:
                 print("Unknown command")
         else:
             loop.run_until_complete(send_message(writer, MessageType.MESSAGE, message))
+
+
+async def send_message_with_incorrect_checksum(writer, msg_type, content):
+    global client_seq_num
+    packet = message_handler.create_message(msg_type, content, client_seq_num)
+    packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
+    writer.write(bytes(packet))
+    await writer.drain()
+    client_seq_num += 1
 
 
 async def main():
@@ -80,7 +134,7 @@ async def main():
     input_thread = threading.Thread(target=handle_user_input, args=(writer,))
     input_thread.start()
 
-    await receive_message(reader)
+    await receive_message(reader, writer)
 
     print("Closing connection")
     writer.close()

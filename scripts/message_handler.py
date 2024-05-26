@@ -100,6 +100,11 @@ async def receive_message(reader, expected_seq_num):
     )  # Read a larger buffer to ensure we capture the whole packet
     print(f"\nRaw data received: {data}\n")
     message = parse_message(data)
+
+    if message.type == MessageTypeMapping[MessageType.NACK]:
+        print(f"Received NACK for seq_num {expected_seq_num}")
+        return message  # Return the NACK message without checking the sequence number
+
     if message.seq_num != expected_seq_num:
         raise ValueError(
             f"Sequence number mismatch, expected {expected_seq_num} received {message.seq_num}"

@@ -209,12 +209,9 @@ async def handle_client(reader, writer):
             rooms[current_room].remove(writer)
         writer.close()
         await writer.wait_closed()
-        if address in clients:
-            del clients[address]
-        if address in client_seq_nums:
-            del client_seq_nums[address]
-        if address in server_seq_nums:
-            del server_seq_nums[address]
+        del clients[address]
+        del client_seq_nums[address]
+        del server_seq_nums[address]
         print(f"Connection with {address} closed")
 
 async def send_and_store_message(writer, msg_type, content, seq_num):

@@ -33,25 +33,28 @@ async def send_message(writer, msg_type, content):
     client_seq_num += 1
 
 
-async def receive_message(reader, message_display):
+async def receive_message(reader, message_display, writer):
     global server_seq_num
     global running
     try:
         while running:
             packet = await message_handler.receive_message(reader, server_seq_num)
+            packet_type = ReverseMessageTypeMapping.get(packet.type)
+
+            if packet_type == MessageType.NACK:
+                expected_seq_num = int(packet.content.split()[-1])
+                if expected_seq_num in sent_packets:
+                    await retransmit_packet(writer, sent_packets[expected_seq_num])
+                continue  # Do not increment server_seq_num on NACK
+
             if packet.seq_num != server_seq_num:
                 await send_nack(writer, server_seq_num)
                 continue
+
             server_seq_num += 1
             message_display.config(state=tk.NORMAL)
             message_display.insert(tk.END, f"Received: {packet.content}\n")
             message_display.config(state=tk.DISABLED)
-
-            # Handle NACK message
-            if packet.type == MessageTypeMapping[MessageType.NACK]:
-                expected_seq_num = int(packet.content.split()[-1])
-                if expected_seq_num in sent_packets:
-                    await retransmit_packet(writer, sent_packets[expected_seq_num])
     except Exception as e:
         print(f"Error receiving message: {e}")
 
@@ -148,7 +151,7 @@ async def send_message_with_incorrect_checksum(writer, msg_type, content):
 
 
 async def start_network(reader, writer, message_display):
-    await receive_message(reader, message_display)
+    await receive_message(reader, message_display,writer)
 
 
 def main():
