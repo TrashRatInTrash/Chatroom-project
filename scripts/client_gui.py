@@ -143,8 +143,7 @@ def main():
     send_button = tk.Button(root, text="Send")
     send_button.grid(row=1, column=1, padx=10, pady=10)
 
-    send_incorrect_button = tk.Button(root, text="Send Incorrect Checksum")
-    send_incorrect_button.grid(row=2, column=1, padx=10, pady=10)
+
 
     close_button = tk.Button(
         root, text="Close", command=lambda: on_closing(writer, root)
@@ -158,8 +157,6 @@ def main():
     send_input = handle_user_input(writer, message_entry, message_display)
     send_button.config(command=send_input)
 
-    send_incorrect_input = handle_incorrect_checksum_input(writer, message_entry)
-    send_incorrect_button.config(command=send_incorrect_input)
 
     network_thread = threading.Thread(
         target=loop.run_until_complete,
