@@ -1,3 +1,5 @@
+# Updated main server code
+
 import asyncio
 import message_handler
 from CONSTANTS import MessageType
@@ -6,7 +8,6 @@ clients = {}
 client_seq_nums = {}
 server_seq_nums = {}
 rooms = {}
-
 
 MessageTypeMapping = {
     MessageType.COMMAND: 0,
@@ -17,7 +18,6 @@ MessageTypeMapping = {
     MessageType.INFO: 5,
 }
 
-# Reverse map to convert numerical values back to MessageType
 ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
 
 
@@ -35,12 +35,13 @@ def return_command_code(command):
     if command.startswith("/username"):
         return 6
 
+    if command == "/users":
+        return 8
+
 
 async def handle_client(reader, writer):
     address = writer.get_extra_info("peername")
-    print(
-        f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nAccepted connection from {address}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-    )
+    print(f"\nAccepted connection from {address}\n")
 
     client_seq_nums[address] = 0
     server_seq_nums[address] = 0
@@ -48,7 +49,6 @@ async def handle_client(reader, writer):
     current_room = None
 
     try:
-        # Prompt for username
         await message_handler.send_message(
             writer,
             MessageType.INFO,
@@ -58,155 +58,151 @@ async def handle_client(reader, writer):
         client_seq_nums[address] += 1
 
         while True:
-            packet = await message_handler.receive_message(
-                reader, server_seq_nums[address]
-            )
-            server_seq_nums[address] += 1
+            try:
+                packet = await message_handler.receive_message(
+                    reader, server_seq_nums[address]
+                )
+                server_seq_nums[address] += 1
 
-            # Decode content if it's bytes
-            content = (
-                packet.content.decode()
-                if isinstance(packet.content, bytes)
-                else packet.content
-            )
-            print(f"content : {content}")
-            packet_type = ReverseMessageTypeMapping.get(packet.type)
+                content = (
+                    packet.content.decode()
+                    if isinstance(packet.content, bytes)
+                    else packet.content
+                )
+                packet_type = ReverseMessageTypeMapping.get(packet.type)
 
-            if packet_type == MessageType.COMMAND:
-                command = content.strip()
-                code = return_command_code(command)
+                if packet_type == MessageType.COMMAND:
+                    command = content.strip()
+                    code = return_command_code(command)
 
-                print(f"code == {code}")
-
-                if code == 6:  # Set username
-                    print("\n code == 6 if statement\n")
-                    _, username = command.split(maxsplit=1)
-                    clients[address] = username
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.RESP,
-                        f"Username set to {username}",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
-                    break
-                else:
-                    print("\n code == 6 else statement\n")
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.RESP,
-                        "Please set your username first using /username <your_username>",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
+                    if code == 6:  # Set username
+                        _, username = command.split(maxsplit=1)
+                        clients[address] = username
+                        await message_handler.send_message(
+                            writer,
+                            MessageType.RESP,
+                            f"Username set to {username}",
+                            client_seq_nums[address],
+                        )
+                        client_seq_nums[address] += 1
+                        break
+                    else:
+                        await message_handler.send_message(
+                            writer,
+                            MessageType.RESP,
+                            "Please set your username first using /username <your_username>",
+                            client_seq_nums[address],
+                        )
+                        client_seq_nums[address] += 1
+            except ValueError as e:
+                await message_handler.send_nack(writer, server_seq_nums[address])
 
         while True:
-            print("\n~~~~~~~~~~~\nentered main receive loop\n~~~~~~~~~~~\n")
-            packet = await message_handler.receive_message(
-                reader, server_seq_nums[address]
-            )
-            server_seq_nums[address] += 1
-            print(
-                f"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\nHandling message from {username} ({address}): {packet}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-            )
+            try:
+                packet = await message_handler.receive_message(
+                    reader, server_seq_nums[address]
+                )
+                server_seq_nums[address] += 1
 
-            # Decode content if it's bytes
-            content = (
-                packet.content.decode()
-                if isinstance(packet.content, bytes)
-                else packet.content
-            )
-            packet_type = ReverseMessageTypeMapping.get(packet.type)
+                content = (
+                    packet.content.decode()
+                    if isinstance(packet.content, bytes)
+                    else packet.content
+                )
+                packet_type = ReverseMessageTypeMapping.get(packet.type)
 
-            if packet_type == MessageType.COMMAND:
-                command = content.strip()
-                code = return_command_code(command)
+                if packet_type == MessageType.COMMAND:
+                    command = content.strip()
+                    code = return_command_code(command)
 
-                if code == 1:  # Hard disconnect
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.RESP,
-                        "Disconnecting",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
-                    break
-                elif code == 2:  # Create room
-                    room_id = f"room_{len(rooms) + 1}"
-                    rooms[room_id] = [writer]
-                    current_room = room_id
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.RESP,
-                        f"Created and joined room {room_id}",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
-                elif code == 3:  # Join room
-                    _, room_id = command.split()
-                    if room_id in rooms:
-                        rooms[room_id].append(writer)
+                    if code == 1:  # Hard disconnect
+                        await message_handler.send_message(
+                            writer,
+                            MessageType.RESP,
+                            "Disconnecting",
+                            client_seq_nums[address],
+                        )
+                        client_seq_nums[address] += 1
+                        break
+                    elif code == 2:  # Create room
+                        room_id = f"room_{len(rooms) + 1}"
+                        rooms[room_id] = [writer]
                         current_room = room_id
                         await message_handler.send_message(
                             writer,
                             MessageType.RESP,
-                            f"Joined room {room_id}",
+                            f"Created and joined room {room_id}",
                             client_seq_nums[address],
                         )
                         client_seq_nums[address] += 1
-                    else:
+                    elif code == 3:  # Join room
+                        _, room_id = command.split()
+                        if room_id in rooms:
+                            rooms[room_id].append(writer)
+                            current_room = room_id
+                            await message_handler.send_message(
+                                writer,
+                                MessageType.RESP,
+                                f"Joined room {room_id}",
+                                client_seq_nums[address],
+                            )
+                            client_seq_nums[address] += 1
+                        else:
+                            await message_handler.send_message(
+                                writer,
+                                MessageType.RESP,
+                                "Room does not exist",
+                                client_seq_nums[address],
+                            )
+                            client_seq_nums[address] += 1
+                    elif code == 4:  # Leave room
+                        if current_room and writer in rooms[current_room]:
+                            rooms[current_room].remove(writer)
+                            current_room = None
+                            await message_handler.send_message(
+                                writer,
+                                MessageType.RESP,
+                                "Left the room",
+                                client_seq_nums[address],
+                            )
+                            client_seq_nums[address] += 1
+                        else:
+                            await message_handler.send_message(
+                                writer,
+                                MessageType.RESP,
+                                "Not in any room",
+                                client_seq_nums[address],
+                            )
+                            client_seq_nums[address] += 1
+                    elif code == 8:  # List users
+                        user_list = ", ".join(clients.values())
                         await message_handler.send_message(
                             writer,
                             MessageType.RESP,
-                            "Room does not exist",
+                            f"Online users: {user_list}",
                             client_seq_nums[address],
                         )
                         client_seq_nums[address] += 1
-                elif code == 4:  # Leave room
-                    if current_room and writer in rooms[current_room]:
-                        rooms[current_room].remove(writer)
-                        current_room = None
-                        await message_handler.send_message(
-                            writer,
-                            MessageType.RESP,
-                            "Left the room",
-                            client_seq_nums[address],
-                        )
-                        client_seq_nums[address] += 1
-                    else:
-                        await message_handler.send_message(
-                            writer,
-                            MessageType.RESP,
-                            "Not in any room",
-                            client_seq_nums[address],
-                        )
-                        client_seq_nums[address] += 1
-                elif code == 5:  # Send incorrect checksum
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.COMMAND,
-                        "This message has an incorrect checksum",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
-            else:
-                if current_room:
-                    await broadcast(content, username, current_room)
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.ACK,
-                        "Message received",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
                 else:
-                    await message_handler.send_message(
-                        writer,
-                        MessageType.RESP,
-                        "You are not in a room. Use /create or /join to enter a room.",
-                        client_seq_nums[address],
-                    )
-                    client_seq_nums[address] += 1
+                    if current_room:
+                        await broadcast(content, username, current_room)
+                        await message_handler.send_message(
+                            writer,
+                            MessageType.ACK,
+                            "Message received",
+                            client_seq_nums[address],
+                        )
+                        client_seq_nums[address] += 1
+                    else:
+                        await message_handler.send_message(
+                            writer,
+                            MessageType.RESP,
+                            "You are not in a room. Use /create or /join to enter a room.",
+                            client_seq_nums[address],
+                        )
+                        client_seq_nums[address] += 1
+            except ValueError as e:
+                await message_handler.send_nack(writer, server_seq_nums[address])
 
     except Exception as e:
         print(f"Exception: {e}")

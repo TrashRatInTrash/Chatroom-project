@@ -109,3 +109,11 @@ async def receive_message(reader, expected_seq_num):
     )
     print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
     return message
+
+
+async def send_nack(writer, expected_seq_num):
+    nack_message = create_message(
+        MessageType.NACK, f"NACK for {expected_seq_num}", expected_seq_num
+    )
+    writer.write(bytes(nack_message))
+    await writer.drain()

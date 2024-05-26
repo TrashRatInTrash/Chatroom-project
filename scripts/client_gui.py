@@ -12,6 +12,23 @@ running = True
 username_set = False
 
 
+clients = {}
+client_seq_nums = {}
+server_seq_nums = {}
+rooms = {}
+
+MessageTypeMapping = {
+    MessageType.COMMAND: 0,
+    MessageType.MESSAGE: 1,
+    MessageType.ACK: 2,
+    MessageType.NACK: 3,
+    MessageType.RESP: 4,
+    MessageType.INFO: 5,
+}
+
+ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
+
+
 async def send_message(writer, msg_type, content):
     global client_seq_num
     await message_handler.send_message(writer, msg_type, content, client_seq_num)
@@ -79,6 +96,14 @@ def handle_user_input(writer, message_entry, message_display):
                     )
                 elif command == "/wrong":
                     loop.run_until_complete(
+                        send_message_with_incorrect_checksum(
+                            writer,
+                            MessageType.MESSAGE,
+                            "Test message with incorrect checksum",
+                        )
+                    )
+                elif command == "/users":
+                    loop.run_until_complete(
                         send_message(writer, MessageType.COMMAND, command)
                     )
                 else:
@@ -91,6 +116,18 @@ def handle_user_input(writer, message_entry, message_display):
                 )
 
     return send_input
+
+
+async def send_message_with_incorrect_checksum(writer, msg_type, content):
+    global client_seq_num
+    packet = message_handler.create_message(msg_type, content, client_seq_num)
+    packet.checksum = b"incorrect_checksum"  # Intentionally set an incorrect checksum
+    print(
+        f"Sending INCORRECT CHECKSUM message packet:\nType: {packet.type}\nSeq Num: {packet.seq_num}\nContent Length: {packet.content_length}\nContent: {packet.content}\nChecksum: {packet.checksum.decode()}"
+    )
+    writer.write(bytes(packet))
+    await writer.drain()
+    client_seq_num += 1
 
 
 async def start_network(reader, writer, message_display):
@@ -120,7 +157,7 @@ def main():
     close_button.grid(row=1, column=2, padx=10, pady=10)
 
     loop = asyncio.get_event_loop()
-    reader, writer = loop.run_until_complete(asyncio.open_connection("127.0.0.1", 5555))
+    reader, writer = loop.run_until_complete(asyncio.open_connection("192.168.28.83", 5555))
     print("Connected to server")
 
     send_input = handle_user_input(writer, message_entry, message_display)
