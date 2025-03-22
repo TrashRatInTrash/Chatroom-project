@@ -23,7 +23,7 @@ MessageTypeMapping = {
 ReverseMessageTypeMapping = {v: k for k, v in MessageTypeMapping.items()}
 
 
-def return_command_code(command):
+def return_command_code(command): # why is this ifs and not a switch or an enum?????
     if command == "/qqq":
         return 1
     if command.startswith("/create"):
